@@ -261,7 +261,7 @@ void TextWindow::Init() {
             window->onRender = std::bind(&TextWindow::Paint, this);
             window->onEditingDone = std::bind(&TextWindow::EditControlDone, this, _1);
             window->onScrollbarAdjusted = std::bind(&TextWindow::ScrollbarEvent, this, _1);
-            window->SetMinContentSize(370, 370);
+            window->SetMinContentSize(400, 370);
         }
     }
 
