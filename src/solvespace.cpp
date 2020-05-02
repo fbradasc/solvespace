@@ -139,10 +139,17 @@ void SolveSpaceUI::Init() {
     AfterNewFile();
 
     if(TW.window && GW.window) {
+#if 0
+        GW.window->ThawPosition(settings, "GraphicsWindow");
+        GW.window->SetVisible(true);
+        TW.window->ThawPosition(settings, "TextWindow");
+        TW.window->SetVisible(true);
+#else
         TW.window->ThawPosition(settings, "TextWindow");
         GW.window->ThawPosition(settings, "GraphicsWindow");
         TW.window->SetVisible(true);
         GW.window->SetVisible(true);
+#endif
         GW.window->Focus();
 
         // Do this once the window is created.

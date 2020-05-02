@@ -25,6 +25,9 @@
 #include <gtkmm/separatormenuitem.h>
 #include <gtkmm/tooltip.h>
 #include <gtkmm/window.h>
+#include <gtkmm/layout.h>
+#include <gtkmm/bin.h>
+#include <gtkmm/paned.h>
 
 #include "config.h"
 #if defined(HAVE_GTK_FILECHOOSERNATIVE)
@@ -724,11 +727,11 @@ protected:
     }
 };
 
-class GtkWindow : public Gtk::Window {
+class GtkWindow {
     Platform::Window   *_receiver;
     Gtk::VBox           _vbox;
     Gtk::MenuBar       *_menu_bar = NULL;
-    Gtk::HBox           _hbox;
+    Gtk::HPaned         _hpaned;
     GtkEditorOverlay    _editor_overlay;
     Gtk::VScrollbar     _scrollbar;
     bool                _is_under_cursor = false;
@@ -737,23 +740,31 @@ class GtkWindow : public Gtk::Window {
     Gdk::Rectangle      _tooltip_area;
 
 public:
-    GtkWindow(Platform::Window *receiver) : _receiver(receiver), _editor_overlay(receiver) {
-        _hbox.pack_start(_editor_overlay, /*expand=*/true, /*fill=*/true);
-        _hbox.pack_end(_scrollbar, /*expand=*/false, /*fill=*/false);
-        _vbox.pack_end(_hbox, /*expand=*/true, /*fill=*/true);
-        add(_vbox);
+    GtkWindow(Platform::Window *receiver)
+        : _receiver(receiver)
+        , _editor_overlay(receiver) {
+        docking_container().pack1(_editor_overlay);
+        _vbox.pack_end(_hpaned, /*expand=*/true, /*fill=*/true);
 
         _vbox.show();
-        _hbox.show();
+        _hpaned.show();
         _editor_overlay.show();
         get_gl_widget().show();
 
-        _scrollbar.get_adjustment()->signal_value_changed().
+        get_scrollbar().get_adjustment()->signal_value_changed().
             connect(sigc::mem_fun(this, &GtkWindow::on_scrollbar_value_changed));
 
         get_gl_widget().set_has_tooltip(true);
         get_gl_widget().signal_query_tooltip().
             connect(sigc::mem_fun(this, &GtkWindow::on_query_tooltip));
+    }
+
+    Gtk::HPaned &docking_container() {
+        return _hpaned;
+    }
+
+    Gtk::VBox &top_level_container() {
+        return _vbox;
     }
 
     bool is_full_screen() const {
@@ -803,19 +814,19 @@ protected:
         return !_tooltip_text.empty() && (keyboard_tooltip || _is_under_cursor);
     }
 
-    bool on_enter_notify_event(GdkEventCrossing* gdk_event) override {
+    bool parent_on_enter_notify_event(GdkEventCrossing* gdk_event) {
         _is_under_cursor = true;
 
         return true;
     }
 
-    bool on_leave_notify_event(GdkEventCrossing* gdk_event) override {
+    bool parent_on_leave_notify_event(GdkEventCrossing* gdk_event) {
         _is_under_cursor = false;
 
         return true;
     }
 
-    bool on_delete_event(GdkEventAny* gdk_event) override {
+    bool parent_on_delete_event(GdkEventAny* gdk_event) {
         if(_receiver->onClose) {
             _receiver->onClose();
             return true;
@@ -824,7 +835,7 @@ protected:
         return false;
     }
 
-    bool on_window_state_event(GdkEventWindowState *gdk_event) override {
+    bool parent_on_window_state_event(GdkEventWindowState *gdk_event) {
         _is_fullscreen = gdk_event->new_window_state & GDK_WINDOW_STATE_FULLSCREEN;
         if(_receiver->onFullScreen) {
             _receiver->onFullScreen(_is_fullscreen);
@@ -832,11 +843,48 @@ protected:
 
         return true;
     }
-
     void on_scrollbar_value_changed() {
         if(_receiver->onScrollbarAdjusted) {
-            _receiver->onScrollbarAdjusted(_scrollbar.get_adjustment()->get_value());
+            _receiver->onScrollbarAdjusted(get_scrollbar().get_adjustment()->get_value());
         }
+    }
+};
+
+class GtkTopLevel : public Gtk::Window, public GtkWindow {
+public:
+    GtkTopLevel(Platform::Window *receiver)
+        : GtkWindow(receiver) {
+        add(top_level_container());
+    }
+
+protected:
+    bool on_enter_notify_event(GdkEventCrossing* gdk_event) override {
+        return parent_on_enter_notify_event(gdk_event);
+    }
+
+    bool on_leave_notify_event(GdkEventCrossing* gdk_event) override {
+        return parent_on_leave_notify_event(gdk_event);
+    }
+
+    bool on_delete_event(GdkEventAny* gdk_event) override {
+        return parent_on_delete_event(gdk_event);
+    }
+
+    bool on_window_state_event(GdkEventWindowState *gdk_event) override {
+        return parent_on_window_state_event(gdk_event);
+    }
+};
+
+class GtkTools : public Gtk::Bin, public GtkWindow {
+public:
+    GtkTools(Platform::Window *receiver, GtkWindow *parent)
+        : GtkWindow(receiver) {
+        if (parent)
+        {
+            parent->docking_container().pack2(*this, /*resize=*/false, /*shrink=*/false);
+printf("docking...\n");
+        }
+        add(top_level_container());
     }
 };
 
@@ -844,23 +892,12 @@ protected:
 // Windows
 //-----------------------------------------------------------------------------
 
-class WindowImplGtk final : public Window {
+class TopLevelImplGtk final : public Window {
 public:
-    GtkWindow       gtkWindow;
+    GtkTopLevel     gtkWindow;
     MenuBarRef      menuBar;
 
-    WindowImplGtk(Window::Kind kind) : gtkWindow(this) {
-        switch(kind) {
-            case Kind::TOPLEVEL:
-                break;
-
-            case Kind::TOOL:
-                gtkWindow.set_type_hint(Gdk::WINDOW_TYPE_HINT_UTILITY);
-                gtkWindow.set_skip_taskbar_hint(true);
-                gtkWindow.set_skip_pager_hint(true);
-                break;
-        }
-
+    TopLevelImplGtk(): gtkWindow(this) {
         auto icon = LoadPng("freedesktop/solvespace-48x48.png");
         auto gdkIcon =
             Gdk::Pixbuf::create_from_data(&icon->data[0], Gdk::COLORSPACE_RGB,
@@ -1020,13 +1057,173 @@ public:
     }
 };
 
-WindowRef CreateWindow(Window::Kind kind, WindowRef parentWindow) {
-    auto window = std::make_shared<WindowImplGtk>(kind);
-    if(parentWindow) {
-        window->gtkWindow.set_transient_for(
-            std::static_pointer_cast<WindowImplGtk>(parentWindow)->gtkWindow);
+class ToolsImplGtk final : public Window {
+public:
+    GtkTools        gtkWindow;
+    WindowRef       parent;
+
+    ToolsImplGtk(WindowRef parent_)
+        : gtkWindow(this, &std::static_pointer_cast<TopLevelImplGtk>(parent_)->gtkWindow)
+        , parent(parent_)
+    {
+printf("%s\n",__func__);
     }
-    return window;
+
+    double GetPixelDensity() override {
+printf("%s\n",__func__);
+        return gtkWindow.get_screen()->get_resolution();
+    }
+
+    int GetDevicePixelRatio() override {
+printf("%s\n",__func__);
+        return gtkWindow.get_scale_factor();
+    }
+
+    bool IsVisible() override {
+printf("%s\n",__func__);
+        return gtkWindow.is_visible();
+    }
+
+    void SetVisible(bool visible) override {
+printf("%s\n",__func__);
+        if(visible) {
+            gtkWindow.show();
+        } else {
+            gtkWindow.hide();
+        }
+    }
+
+    void Focus() override {
+printf("%s\n",__func__);
+    }
+
+    bool IsFullScreen() override {
+printf("%s\n",__func__);
+    }
+
+    void SetFullScreen(bool fullScreen) override {
+printf("%s\n",__func__);
+    }
+
+    void SetTitle(const std::string &title) override {
+printf("%s\n",__func__);
+    }
+
+    void SetMenuBar(MenuBarRef newMenuBar) override {
+printf("%s\n",__func__);
+    }
+
+    void GetContentSize(double *width, double *height) override {
+        // std::static_pointer_cast<TopLevelImplGtk>(parent)->GetContentSize(width,height);
+        *width  = gtkWindow.get_gl_widget().get_allocated_width();
+        *height = gtkWindow.get_gl_widget().get_allocated_height();
+printf("%s: from gl_widget: %lfx%lf\n",__func__,*width,*height);
+    }
+
+    void SetMinContentSize(double width, double height) override {
+        int w,h;
+        std::static_pointer_cast<TopLevelImplGtk>(parent)->gtkWindow.get_size(w,h);
+        gtkWindow.set_size_request((int)width,h);
+        gtkWindow.get_gl_widget().set_size_request((int)width,h);
+printf("%s: Enter - %lfx%d\n",__func__,width,h);
+    }
+
+    void FreezePosition(SettingsRef settings, const std::string &key) override {
+        if(!gtkWindow.is_visible()) return;
+
+        int width = gtkWindow.get_width();
+
+printf("%s exit: %d\n",__func__, width);
+        settings->FreezeInt(key + "_Width", width);
+    }
+
+    void ThawPosition(SettingsRef settings, const std::string &key) override {
+        int width  = gtkWindow.get_width();
+
+        width  = settings->ThawInt(key + "_Width",  width);
+
+printf("%s: from widget: %d\n",__func__,width);
+
+//        gtkWindow.set_size_request(width);
+//        gtkWindow.get_gl_widget().set_size_request(width);
+    }
+
+    void SetCursor(Cursor cursor) override {
+printf("%s\n",__func__);
+        Gdk::CursorType gdkCursorType;
+        switch(cursor) {
+            case Cursor::POINTER: gdkCursorType = Gdk::ARROW; break;
+            case Cursor::HAND:    gdkCursorType = Gdk::HAND1; break;
+            default: ssassert(false, "Unexpected cursor");
+        }
+
+        auto gdkWindow = gtkWindow.get_gl_widget().get_window();
+        if(gdkWindow) {
+            gdkWindow->set_cursor(Gdk::Cursor::create(gdkCursorType));
+        }
+    }
+
+    void SetTooltip(const std::string &text, double x, double y,
+                    double width, double height) override {
+printf("%s\n",__func__);
+        gtkWindow.set_tooltip(text, { (int)x, (int)y, (int)width, (int)height });
+    }
+
+    bool IsEditorVisible() override {
+printf("%s\n",__func__);
+        return gtkWindow.get_editor_overlay().is_editing();
+    }
+
+    void ShowEditor(double x, double y, double fontHeight, double minWidth,
+                    bool isMonospace, const std::string &text) override {
+printf("%s\n",__func__);
+        gtkWindow.get_editor_overlay().start_editing(
+            (int)x, (int)y, (int)fontHeight, (int)minWidth, isMonospace, text);
+    }
+
+    void HideEditor() override {
+printf("%s\n",__func__);
+        gtkWindow.get_editor_overlay().stop_editing();
+    }
+
+    void SetScrollbarVisible(bool visible) override {
+        if(visible) {
+printf("%s - show\n",__func__);
+            gtkWindow.get_scrollbar().show();
+        } else {
+printf("%s - hide\n",__func__);
+            gtkWindow.get_scrollbar().hide();
+        }
+    }
+
+    void ConfigureScrollbar(double min, double max, double pageSize) override {
+printf("%s - %lf<%lf@%lf\n",__func__,min,max,pageSize);
+        auto adjustment = gtkWindow.get_scrollbar().get_adjustment();
+        adjustment->configure(adjustment->get_value(), min, max, 1, 4, pageSize);
+    }
+
+    double GetScrollbarPosition() override {
+printf("%s\n",__func__);
+        return gtkWindow.get_scrollbar().get_adjustment()->get_value();
+    }
+
+    void SetScrollbarPosition(double pos) override {
+printf("%s - %lf\n",__func__,pos);
+        return gtkWindow.get_scrollbar().get_adjustment()->set_value(pos);
+    }
+
+    void Invalidate() override {
+printf("%s\n",__func__);
+        gtkWindow.get_gl_widget().queue_render();
+    }
+};
+
+WindowRef CreateWindow(Window::Kind kind, WindowRef parentWindow) {
+    if (kind == Window::Kind::TOOL) {
+        return std::make_shared<ToolsImplGtk>(parentWindow);
+    }
+
+    return std::make_shared<TopLevelImplGtk>();
 }
 
 //-----------------------------------------------------------------------------
@@ -1039,7 +1236,7 @@ void Close3DConnexion() {}
 #if defined(HAVE_SPACEWARE) && defined(GDK_WINDOWING_X11)
 static GdkFilterReturn GdkSpnavFilter(GdkXEvent *gdkXEvent, GdkEvent *gdkEvent, gpointer data) {
     XEvent *xEvent = (XEvent *)gdkXEvent;
-    WindowImplGtk *window = (WindowImplGtk *)data;
+    TopLevelImplGtk *window = (TopLevelImplGtk *)data;
 
     spnav_event spnavEvent;
     if(!spnav_x11_event(xEvent, &spnavEvent)) {
@@ -1087,8 +1284,8 @@ static GdkFilterReturn GdkSpnavFilter(GdkXEvent *gdkXEvent, GdkEvent *gdkEvent, 
 }
 
 void Request3DConnexionEventsForWindow(WindowRef window) {
-    std::shared_ptr<WindowImplGtk> windowImpl =
-        std::static_pointer_cast<WindowImplGtk>(window);
+    std::shared_ptr<TopLevelImplGtk> windowImpl =
+        std::static_pointer_cast<TopLevelImplGtk>(window);
 
     Glib::RefPtr<Gdk::Window> gdkWindow = windowImpl->gtkWindow.get_window();
     if(GDK_IS_X11_DISPLAY(gdkWindow->get_display()->gobj())) {
@@ -1215,7 +1412,7 @@ public:
 
 MessageDialogRef CreateMessageDialog(WindowRef parentWindow) {
     return std::make_shared<MessageDialogImplGtk>(
-                std::static_pointer_cast<WindowImplGtk>(parentWindow)->gtkWindow);
+                std::static_pointer_cast<TopLevelImplGtk>(parentWindow)->gtkWindow);
 }
 
 //-----------------------------------------------------------------------------
@@ -1392,12 +1589,12 @@ public:
 #endif
 
 FileDialogRef CreateOpenFileDialog(WindowRef parentWindow) {
-    Gtk::Window &gtkParent = std::static_pointer_cast<WindowImplGtk>(parentWindow)->gtkWindow;
+    Gtk::Window &gtkParent = std::static_pointer_cast<TopLevelImplGtk>(parentWindow)->gtkWindow;
     return std::make_shared<FILE_DIALOG_IMPL>(gtkParent, /*isSave=*/false);
 }
 
 FileDialogRef CreateSaveFileDialog(WindowRef parentWindow) {
-    Gtk::Window &gtkParent = std::static_pointer_cast<WindowImplGtk>(parentWindow)->gtkWindow;
+    Gtk::Window &gtkParent = std::static_pointer_cast<TopLevelImplGtk>(parentWindow)->gtkWindow;
     return std::make_shared<FILE_DIALOG_IMPL>(gtkParent, /*isSave=*/true);
 }
 
