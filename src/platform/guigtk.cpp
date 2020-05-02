@@ -25,7 +25,6 @@
 #include <gtkmm/separatormenuitem.h>
 #include <gtkmm/tooltip.h>
 #include <gtkmm/window.h>
-#include <gtkmm/layout.h>
 #include <gtkmm/bin.h>
 #include <gtkmm/paned.h>
 
