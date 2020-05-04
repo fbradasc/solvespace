@@ -881,7 +881,6 @@ public:
         if (parent)
         {
             parent->docking_container().pack2(*this, /*resize=*/false, /*shrink=*/false);
-printf("docking...\n");
         }
         add(top_level_container());
     }
@@ -1065,26 +1064,21 @@ public:
         : gtkWindow(this, &std::static_pointer_cast<TopLevelImplGtk>(parent_)->gtkWindow)
         , parent(parent_)
     {
-printf("%s\n",__func__);
     }
 
     double GetPixelDensity() override {
-printf("%s\n",__func__);
         return gtkWindow.get_screen()->get_resolution();
     }
 
     int GetDevicePixelRatio() override {
-printf("%s\n",__func__);
         return gtkWindow.get_scale_factor();
     }
 
     bool IsVisible() override {
-printf("%s\n",__func__);
         return gtkWindow.is_visible();
     }
 
     void SetVisible(bool visible) override {
-printf("%s\n",__func__);
         if(visible) {
             gtkWindow.show();
         } else {
@@ -1093,62 +1087,40 @@ printf("%s\n",__func__);
     }
 
     void Focus() override {
-printf("%s\n",__func__);
     }
 
     bool IsFullScreen() override {
-printf("%s\n",__func__);
     }
 
     void SetFullScreen(bool fullScreen) override {
-printf("%s\n",__func__);
     }
 
     void SetTitle(const std::string &title) override {
-printf("%s\n",__func__);
     }
 
     void SetMenuBar(MenuBarRef newMenuBar) override {
-printf("%s\n",__func__);
     }
 
     void GetContentSize(double *width, double *height) override {
         // std::static_pointer_cast<TopLevelImplGtk>(parent)->GetContentSize(width,height);
         *width  = gtkWindow.get_gl_widget().get_allocated_width();
         *height = gtkWindow.get_gl_widget().get_allocated_height();
-printf("%s: from gl_widget: %lfx%lf\n",__func__,*width,*height);
     }
 
     void SetMinContentSize(double width, double height) override {
-        int w,h;
-        std::static_pointer_cast<TopLevelImplGtk>(parent)->gtkWindow.get_size(w,h);
+        int w,h=(int)height;
+        // std::static_pointer_cast<TopLevelImplGtk>(parent)->gtkWindow.get_size(w,h);
         gtkWindow.set_size_request((int)width,h);
         gtkWindow.get_gl_widget().set_size_request((int)width,h);
-printf("%s: Enter - %lfx%d\n",__func__,width,h);
     }
 
     void FreezePosition(SettingsRef settings, const std::string &key) override {
-        if(!gtkWindow.is_visible()) return;
-
-        int width = gtkWindow.get_width();
-
-printf("%s exit: %d\n",__func__, width);
-        settings->FreezeInt(key + "_Width", width);
     }
 
     void ThawPosition(SettingsRef settings, const std::string &key) override {
-        int width  = gtkWindow.get_width();
-
-        width  = settings->ThawInt(key + "_Width",  width);
-
-printf("%s: from widget: %d\n",__func__,width);
-
-//        gtkWindow.set_size_request(width);
-//        gtkWindow.get_gl_widget().set_size_request(width);
     }
 
     void SetCursor(Cursor cursor) override {
-printf("%s\n",__func__);
         Gdk::CursorType gdkCursorType;
         switch(cursor) {
             case Cursor::POINTER: gdkCursorType = Gdk::ARROW; break;
@@ -1164,55 +1136,45 @@ printf("%s\n",__func__);
 
     void SetTooltip(const std::string &text, double x, double y,
                     double width, double height) override {
-printf("%s\n",__func__);
         gtkWindow.set_tooltip(text, { (int)x, (int)y, (int)width, (int)height });
     }
 
     bool IsEditorVisible() override {
-printf("%s\n",__func__);
         return gtkWindow.get_editor_overlay().is_editing();
     }
 
     void ShowEditor(double x, double y, double fontHeight, double minWidth,
                     bool isMonospace, const std::string &text) override {
-printf("%s\n",__func__);
         gtkWindow.get_editor_overlay().start_editing(
             (int)x, (int)y, (int)fontHeight, (int)minWidth, isMonospace, text);
     }
 
     void HideEditor() override {
-printf("%s\n",__func__);
         gtkWindow.get_editor_overlay().stop_editing();
     }
 
     void SetScrollbarVisible(bool visible) override {
         if(visible) {
-printf("%s - show\n",__func__);
             gtkWindow.get_scrollbar().show();
         } else {
-printf("%s - hide\n",__func__);
             gtkWindow.get_scrollbar().hide();
         }
     }
 
     void ConfigureScrollbar(double min, double max, double pageSize) override {
-printf("%s - %lf<%lf@%lf\n",__func__,min,max,pageSize);
         auto adjustment = gtkWindow.get_scrollbar().get_adjustment();
         adjustment->configure(adjustment->get_value(), min, max, 1, 4, pageSize);
     }
 
     double GetScrollbarPosition() override {
-printf("%s\n",__func__);
         return gtkWindow.get_scrollbar().get_adjustment()->get_value();
     }
 
     void SetScrollbarPosition(double pos) override {
-printf("%s - %lf\n",__func__,pos);
         return gtkWindow.get_scrollbar().get_adjustment()->set_value(pos);
     }
 
     void Invalidate() override {
-printf("%s\n",__func__);
         gtkWindow.get_gl_widget().queue_render();
     }
 };
