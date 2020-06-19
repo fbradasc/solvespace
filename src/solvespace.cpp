@@ -44,9 +44,9 @@ void SolveSpaceUI::Init() {
 
     exportMode = false;
     // Chord tolerance
-    chordTol = settings->ThawFloat("ChordTolerancePct", 0.5);
+    chordTol = settings->ThawFloat("ChordTolerancePct", 0.1);
     // Max pwl segments to generate
-    maxSegments = settings->ThawInt("MaxSegments", 10);
+    maxSegments = settings->ThawInt("MaxSegments", 20);
     // Chord tolerance
     exportChordTol = settings->ThawFloat("ExportChordTolerance", 0.1);
     // Max pwl segments to generate
@@ -322,14 +322,7 @@ const char *SolveSpaceUI::UnitName() {
 
 std::string SolveSpaceUI::MmToString(double v) {
     v /= MmPerUnit();
-    switch(viewUnits) {
-        case Unit::INCHES:
-            return ssprintf("%.*f", afterDecimalInch, v);
-        case Unit::METERS:
-        case Unit::MM:
-            return ssprintf("%.*f", afterDecimalMm, v);
-    }
-    return "";
+    return ssprintf("%.*f", UnitDigitsAfterDecimal(), v);
 }
 static const char *DimToString(int dim) {
     switch(dim) {
@@ -372,7 +365,7 @@ std::string SolveSpaceUI::MmToStringSI(double v, int dim) {
         v /= pow(10.0, sdeg * dim);
     }
     int pdeg = (int)ceil(log10(fabs(v) + 1e-10));
-    return ssprintf("%#.*g%s%s%s", pdeg + UnitDigitsAfterDecimal(), v,
+    return ssprintf("%.*g%s%s%s", pdeg + UnitDigitsAfterDecimal(), v,
                     compact ? "" : " ", unit.c_str(), DimToString(dim));
 }
 std::string SolveSpaceUI::DegreeToString(double v) {

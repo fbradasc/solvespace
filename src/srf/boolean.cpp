@@ -379,11 +379,17 @@ void SSurface::EdgeNormalsWithinSurface(Point2d auv, Point2d buv,
            enxyz = (ab.Cross(*surfn)).WithMagnitude(SS.ChordTolMm());
     // And based on that, compute the edge's inner normal in uv space. This
     // vector is perpendicular to the edge in xyz, but not necessarily in uv.
-    Vector tu, tv;
+    Vector tu, tv, tx, ty;
     TangentsAt(muv.x, muv.y, &tu, &tv);
+    Vector n = tu.Cross(tv);
+    // since tu and tv may not be orthogonal, use y in place of v, x in place of u.
+    // |y| = |v|sin(theta) where theta is the angle between tu and tv.
+    ty = n.Cross(tu).ScaledBy(1.0/tu.MagSquared());
+    tx = tv.Cross(n).ScaledBy(1.0/tv.MagSquared());
+
     Point2d enuv;
-    enuv.x = enxyz.Dot(tu) / tu.MagSquared();
-    enuv.y = enxyz.Dot(tv) / tv.MagSquared();
+    enuv.x = enxyz.Dot(tx) / tx.MagSquared();
+    enuv.y = enxyz.Dot(ty) / ty.MagSquared();
 
     // Compute the inner and outer normals of this edge (within the srf),
     // in xyz space. These are not necessarily antiparallel, if the
@@ -403,7 +409,8 @@ void SSurface::EdgeNormalsWithinSurface(Point2d auv, Point2d buv,
 SSurface SSurface::MakeCopyTrimAgainst(SShell *parent,
                                        SShell *sha, SShell *shb,
                                        SShell *into,
-                                       SSurface::CombineAs type)
+                                       SSurface::CombineAs type,
+                                       int dbg_index)
 {
     bool opA = (parent == sha);
     SShell *agnst = opA ? shb : sha;
@@ -594,9 +601,11 @@ SSurface SSurface::MakeCopyTrimAgainst(SShell *parent,
 
     SPolygon poly = {};
     final.l.ClearTags();
-    if(!final.AssemblePolygon(&poly, NULL, /*keepDir=*/true)) {
+    if(!final.AssemblePolygon(&poly, NULL, /*keepDir=*/true))
+#pragma omp critical
+    {
         into->booleanFailed = true;
-        dbp("failed: I=%d, avoid=%d", I, choosing.l.n);
+        dbp("failed: I=%d, avoid=%d", I+dbg_index, choosing.l.n);
         DEBUGEDGELIST(&final, &ret);
     }
     poly.Clear();
@@ -609,13 +618,18 @@ SSurface SSurface::MakeCopyTrimAgainst(SShell *parent,
 }
 
 void SShell::CopySurfacesTrimAgainst(SShell *sha, SShell *shb, SShell *into, SSurface::CombineAs type) {
-    SSurface *ss;
-    for(ss = surface.First(); ss; ss = surface.NextAfter(ss)) {
+#pragma omp parallel for
+    for (int i = 0; i < surface.n; i++)
+    {
+        SSurface *ss = &surface[i];
         SSurface ssn;
-        ssn = ss->MakeCopyTrimAgainst(this, sha, shb, into, type);
-        ss->newH = into->surface.AddAndAssignId(&ssn);
-        I++;
+        ssn = ss->MakeCopyTrimAgainst(this, sha, shb, into, type, i);
+#pragma omp critical
+        {
+            ss->newH = into->surface.AddAndAssignId(&ssn);
+        }
     }
+    I += surface.n;
 }
 
 void SShell::MakeIntersectionCurvesAgainst(SShell *agnst, SShell *into) {
@@ -758,9 +772,9 @@ void SShell::MakeFromBoolean(SShell *a, SShell *b, SSurface::CombineAs type) {
 // All of the BSP routines that we use to perform and accelerate polygon ops.
 //-----------------------------------------------------------------------------
 void SShell::MakeClassifyingBsps(SShell *useCurvesFrom) {
-    SSurface *ss;
-    for(ss = surface.First(); ss; ss = surface.NextAfter(ss)) {
-        ss->MakeClassifyingBsp(this, useCurvesFrom);
+#pragma omp parallel for
+    for(int i = 0; i<surface.n; i++) {
+        surface[i].MakeClassifyingBsp(this, useCurvesFrom);
     }
 }
 
