@@ -46,6 +46,8 @@ set(ENABLE_COVERAGE   OFF CACHE BOOL
     "Whether code coverage information will be collected")
 set(ENABLE_SANITIZERS OFF CACHE BOOL
     "Whether to enable Clang's AddressSanitizer and UndefinedBehaviorSanitizer")
+set(ENABLE_OPENMP     OFF CACHE BOOL
+    "Whether geometric operations will be parallelized using OpenMP")
 
 set(OPENGL 3 CACHE STRING "OpenGL version to use (one of: 1 3)")
 
@@ -96,13 +98,11 @@ if(CMAKE_SYSTEM_PROCESSOR STREQUAL "i686" OR CMAKE_SYSTEM_PROCESSOR STREQUAL "X8
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${FLOAT_FLAGS}")
 endif()
 
-# We use OpenMP to speed up some geometric operations, but it's optional.
-include(FindOpenMP)
-# No MinGW distribution actually ships an OpenMP runtime, but FindOpenMP detects it anyway.
-if(OpenMP_FOUND AND NOT MINGW)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-else()
-    message(WARNING "OpenMP not found, geometric operations will be single-threaded")
+if(ENABLE_OPENMP)
+    include(FindOpenMP)
+    if(OpenMP_FOUND)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+    endif()
 endif()
 
 if(APPLE OR CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
@@ -174,6 +174,14 @@ add_subdirectory(extlib/flatbuffers EXCLUDE_FROM_ALL)
 message(STATUS "Using in-tree q3d")
 add_subdirectory(extlib/q3d)
 set(Q3D_INCLUDE_DIR ${CMAKE_BINARY_DIR}/extlib/q3d)
+
+message(STATUS "Using in-tree mimalloc")
+set(MI_OVERRIDE OFF CACHE BOOL "")
+set(MI_BUILD_SHARED OFF CACHE BOOL "")
+set(MI_BUILD_OBJECT OFF CACHE BOOL "")
+set(MI_BUILD_TESTS OFF CACHE BOOL "")
+add_subdirectory(extlib/mimalloc EXCLUDE_FROM_ALL)
+set(MIMALLOC_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/extlib/mimalloc/include)
 
 if(WIN32 OR APPLE)
     # On Win32 and macOS we use vendored packages, since there is little to no benefit

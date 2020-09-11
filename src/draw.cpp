@@ -353,18 +353,34 @@ GraphicsWindow::Selection GraphicsWindow::ChooseFromHoverToSelect() {
     return sel;
 }
 
+// This uses the same logic as hovering and static entity selection
+// but ignores points known not to be draggable
 GraphicsWindow::Selection GraphicsWindow::ChooseFromHoverToDrag() {
     Selection sel = {};
-    for(const Hover &hov : hoverList) {
-        if(hov.selection.entity.v == 0) continue;
-        if(!hov.selection.entity.isFromRequest()) continue;
-        sel = hov.selection;
-        break;
-    }
-    if(!sel.IsEmpty()) {
+    if(hoverList.IsEmpty())
         return sel;
+
+    Group *activeGroup = SK.GetGroup(SS.GW.activeGroup);
+    int bestOrder = -1;
+    int bestZIndex = 0;
+    for(const Hover &hov : hoverList) {
+        hGroup hg = {};
+        if(hov.selection.entity.v != 0) {
+            Entity *e = SK.GetEntity(hov.selection.entity);
+            if (!e->CanBeDragged()) continue;
+            hg = e->group;
+        } else if(hov.selection.constraint.v != 0) {
+            hg = SK.GetConstraint(hov.selection.constraint)->group;
+        }
+
+        Group *g = SK.GetGroup(hg);
+        if(g->order > activeGroup->order) continue;
+        if(bestOrder != -1 && (bestOrder >= g->order || bestZIndex > hov.zIndex)) continue;
+        bestOrder  = g->order;
+        bestZIndex = hov.zIndex;
+        sel = hov.selection;
     }
-    return ChooseFromHoverToSelect();
+    return sel;
 }
 
 void GraphicsWindow::HitTestMakeSelection(Point2d mp) {
@@ -769,9 +785,13 @@ void GraphicsWindow::Draw(Canvas *canvas) {
         const double size = 10.0;
         const int subdiv = 16;
         double h = Style::DefaultTextHeight() / camera.scale;
-        canvas->DrawVectorText(ssprintf("%.3f, %.3f, %.3f", p.x, p.y, p.z), h,
+        std::string s =
+            SS.MmToStringSI(p.x) + ", " +
+            SS.MmToStringSI(p.y) + ", " +
+            SS.MmToStringSI(p.z);
+        canvas->DrawVectorText(s.c_str(), h,
                                p.Plus(u.ScaledBy((size + 5.0)/scale)).Minus(v.ScaledBy(h / 2.0)),
-                               u, v,hcsDatum);
+                               u, v, hcsDatum);
         u = u.WithMagnitude(size / scale);
         v = v.WithMagnitude(size / scale);
 

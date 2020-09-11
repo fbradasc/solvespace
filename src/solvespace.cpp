@@ -33,7 +33,7 @@ void SolveSpaceUI::Init() {
     // Light intensities
     lightIntensity[0] = settings->ThawFloat("LightIntensity_0", 1.0);
     lightIntensity[1] = settings->ThawFloat("LightIntensity_1", 0.5);
-    ambientIntensity = 0.3; // no setting for that yet
+    ambientIntensity = settings->ThawFloat("Light_Ambient", 0.3);
     // Light positions
     lightDir[0].x = settings->ThawFloat("LightDir_0_Right",   -1.0);
     lightDir[0].y = settings->ThawFloat("LightDir_0_Up",       1.0);
@@ -68,6 +68,8 @@ void SolveSpaceUI::Init() {
     exportOffset = settings->ThawFloat("ExportOffset", 0.0);
     // Rewrite exported colors close to white into black (assuming white bg)
     fixExportColors = settings->ThawBool("FixExportColors", true);
+    // Export background color
+    exportBackgroundColor = settings->ThawBool("ExportBackgroundColor", false);
     // Draw back faces of triangles (when mesh is leaky/self-intersecting)
     drawBackFaces = settings->ThawBool("DrawBackFaces", true);
     // Use turntable mouse navigation
@@ -213,6 +215,7 @@ void SolveSpaceUI::Exit() {
     // Light intensities
     settings->FreezeFloat("LightIntensity_0", (float)lightIntensity[0]);
     settings->FreezeFloat("LightIntensity_1", (float)lightIntensity[1]);
+    settings->FreezeFloat("Light_Ambient", (float)ambientIntensity);
     // Light directions
     settings->FreezeFloat("LightDir_0_Right",   (float)lightDir[0].x);
     settings->FreezeFloat("LightDir_0_Up",      (float)lightDir[0].y);
@@ -245,6 +248,8 @@ void SolveSpaceUI::Exit() {
     settings->FreezeFloat("ExportOffset", exportOffset);
     // Rewrite exported colors close to white into black (assuming white bg)
     settings->FreezeBool("FixExportColors", fixExportColors);
+    // Export background color
+    settings->FreezeBool("ExportBackgroundColor", exportBackgroundColor);
     // Draw back faces of triangles (when mesh is leaky/self-intersecting)
     settings->FreezeBool("DrawBackFaces", drawBackFaces);
     // Draw closed polygons areas
