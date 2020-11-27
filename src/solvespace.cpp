@@ -51,6 +51,8 @@ void SolveSpaceUI::Init() {
     exportChordTol = settings->ThawFloat("ExportChordTolerance", 0.1);
     // Max pwl segments to generate
     exportMaxSegments = settings->ThawInt("ExportMaxSegments", 64);
+    // Timeout value for finding redundant constrains (ms)
+    timeoutRedundantConstr = settings->ThawInt("TimeoutRedundantConstraints", 1000);
     // View units
     viewUnits = (Unit)settings->ThawInt("ViewUnits", (uint32_t)Unit::MM);
     // Number of digits after the decimal point
@@ -75,7 +77,7 @@ void SolveSpaceUI::Init() {
     // Use turntable mouse navigation
     turntableNav = settings->ThawBool("TurntableNav", false);
     // Immediately edit dimension
-    immediatelyEditDimension = settings->ThawBool("ImmediatelyEditDimension", false);
+    immediatelyEditDimension = settings->ThawBool("ImmediatelyEditDimension", true);
     // Check that contours are closed and not self-intersecting
     checkClosedContour = settings->ThawBool("CheckClosedContour", true);
     // Enable automatic constrains for lines
@@ -231,6 +233,8 @@ void SolveSpaceUI::Exit() {
     settings->FreezeFloat("ExportChordTolerance", (float)exportChordTol);
     // Export Max pwl segments to generate
     settings->FreezeInt("ExportMaxSegments", (uint32_t)exportMaxSegments);
+    // Timeout for finding which constraints to fix Jacobian
+    settings->FreezeInt("TimeoutRedundantConstraints", (uint32_t)timeoutRedundantConstr);
     // View units
     settings->FreezeInt("ViewUnits", (uint32_t)viewUnits);
     // Number of digits after the decimal point
@@ -337,13 +341,39 @@ static const char *DimToString(int dim) {
         default: ssassert(false, "Unexpected dimension");
     }
 }
-static std::pair<int, std::string> SelectSIPrefixMm(int deg) {
-         if(deg >=  3) return {  3, "km" };
-    else if(deg >=  0) return {  0, "m"  };
-    else if(deg >= -2) return { -2, "cm" };
-    else if(deg >= -3) return { -3, "mm" };
-    else if(deg >= -6) return { -6, "µm" };
-    else               return { -9, "nm" };
+static std::pair<int, std::string> SelectSIPrefixMm(int ord, int dim) {
+// decide what units to use depending on the order of magnitude of the
+// measure in meters and the dimmension (1,2,3 lenear, area, volume)
+    switch(dim) {
+        case 0:
+        case 1:
+                 if(ord >=  3) return {  3, "km" };
+            else if(ord >=  0) return {  0, "m"  };
+            else if(ord >= -2) return { -2, "cm" };
+            else if(ord >= -3) return { -3, "mm" };
+            else if(ord >= -6) return { -6, "µm" };
+            else               return { -9, "nm" };
+            break;
+        case 2:
+                 if(ord >=  5) return {  3, "km" };
+            else if(ord >=  0) return {  0, "m"  };
+            else if(ord >= -2) return { -2, "cm" };
+            else if(ord >= -6) return { -3, "mm" };
+            else if(ord >= -13) return { -6, "µm" };
+            else               return { -9, "nm" };
+            break;
+        case 3:
+                 if(ord >=  7) return {  3, "km" };
+            else if(ord >=  0) return {  0, "m"  };
+            else if(ord >= -5) return { -2, "cm" };
+            else if(ord >= -11) return { -3, "mm" };
+            else                return { -6, "µm" };
+            break;
+        default:
+            dbp ("dimensions over 3 not supported");
+            break;
+    }        
+    return {0, "m"};
 }
 static std::pair<int, std::string> SelectSIPrefixInch(int deg) {
          if(deg >=  0) return {  0, "in"  };
@@ -359,14 +389,14 @@ std::string SolveSpaceUI::MmToStringSI(double v, int dim) {
     }
 
     v /= pow((viewUnits == Unit::INCHES) ? 25.4 : 1000, dim);
-    int vdeg = (int)((log10(fabs(v))) / dim);
+    int vdeg = (int)(log10(fabs(v)));
     std::string unit;
     if(fabs(v) > 0.0) {
         int sdeg = 0;
         std::tie(sdeg, unit) =
             (viewUnits == Unit::INCHES)
-            ? SelectSIPrefixInch(vdeg)
-            : SelectSIPrefixMm(vdeg);
+            ? SelectSIPrefixInch(vdeg/dim)
+            : SelectSIPrefixMm(vdeg, dim);
         v /= pow(10.0, sdeg * dim);
     }
     int pdeg = (int)ceil(log10(fabs(v) + 1e-10));
@@ -961,7 +991,7 @@ void SolveSpaceUI::MenuHelp(Command id) {
 "law. For details, visit http://gnu.org/licenses/\n"
 "\n"
 "© 2008-%d Jonathan Westhues and other authors.\n"),
-PACKAGE_VERSION, 2019);
+PACKAGE_VERSION, 2020);
             break;
 
         default: ssassert(false, "Unexpected menu ID");

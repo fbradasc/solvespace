@@ -268,7 +268,8 @@ public:
     void EvalJacobian();
 
     void WriteEquationsExceptFor(hConstraint hc, Group *g);
-    void FindWhichToRemoveToFixJacobian(Group *g, List<hConstraint> *bad, bool forceDofCheck);
+    void FindWhichToRemoveToFixJacobian(Group *g, List<hConstraint> *bad,
+                                        bool forceDofCheck);
     void SolveBySubstitution();
 
     bool IsDragged(hParam p);
@@ -512,7 +513,7 @@ public:
     GraphicsWindow              GW;
 
     // The state for undo/redo
-    typedef struct {
+    typedef struct UndoState {
         IdList<Group,hGroup>            group;
         List<hGroup>                    groupOrder;
         IdList<Request,hRequest>        request;
@@ -529,7 +530,7 @@ public:
             style.Clear();
         }
     } UndoState;
-    enum { MAX_UNDO = 16 };
+    enum { MAX_UNDO = 100 };
     typedef struct {
         UndoState   d[MAX_UNDO];
         int         cnt;
@@ -562,6 +563,7 @@ public:
     int      maxSegments;
     double   exportChordTol;
     int      exportMaxSegments;
+    int      timeoutRedundantConstr; //milliseconds
     double   cameraTangent;
     double   gridSpacing;
     double   exportScale;
@@ -677,12 +679,13 @@ public:
     void UpgradeLegacyData();
     bool LoadEntitiesFromFile(const Platform::Path &filename, EntityList *le,
                               SMesh *m, SShell *sh);
+    bool LoadEntitiesFromSlvs(const Platform::Path &filename, EntityList *le,
+                              SMesh *m, SShell *sh);
     bool ReloadAllLinked(const Platform::Path &filename, bool canCancel = false);
     // And the various export options
     void ExportAsPngTo(const Platform::Path &filename);
     void ExportMeshTo(const Platform::Path &filename);
     void ExportMeshAsStlTo(FILE *f, SMesh *sm);
-    void ExportMeshAsQ3doTo(FILE *f, SMesh *sm);
     void ExportMeshAsObjTo(FILE *fObj, FILE *fMtl, SMesh *sm);
     void ExportMeshAsThreeJsTo(FILE *f, const Platform::Path &filename,
                                SMesh *sm, SOutlineList *sol);
@@ -808,6 +811,7 @@ public:
 
 void ImportDxf(const Platform::Path &file);
 void ImportDwg(const Platform::Path &file);
+bool LinkIDF(const Platform::Path &filename, EntityList *le, SMesh *m, SShell *sh);
 
 extern SolveSpaceUI SS;
 extern Sketch SK;

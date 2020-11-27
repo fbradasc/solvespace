@@ -121,22 +121,22 @@ static bool RunCommand(const std::vector<std::string> args) {
             argn++;
             if(args[argn] == "top") {
                 projRight = Vector::From(1, 0, 0);
-                projUp    = Vector::From(0, 1, 0);
+                projUp    = Vector::From(0, 0, -1);
             } else if(args[argn] == "bottom") {
-                projRight = Vector::From(-1, 0, 0);
-                projUp    = Vector::From(0, 1, 0);
-            } else if(args[argn] == "left") {
-                projRight = Vector::From(0, 1, 0);
-                projUp    = Vector::From(0, 0, 1);
-            } else if(args[argn] == "right") {
-                projRight = Vector::From(0, -1, 0);
-                projUp    = Vector::From(0, 0, 1);
-            } else if(args[argn] == "front") {
-                projRight = Vector::From(-1, 0, 0);
-                projUp    = Vector::From(0, 0, 1);
-            } else if(args[argn] == "back") {
                 projRight = Vector::From(1, 0, 0);
                 projUp    = Vector::From(0, 0, 1);
+            } else if(args[argn] == "left") {
+                projRight = Vector::From(0, 0, 1);
+                projUp    = Vector::From(0, 1, 0);
+            } else if(args[argn] == "right") {
+                projRight = Vector::From(0, 0, -1);
+                projUp    = Vector::From(0, 1, 0);
+            } else if(args[argn] == "front") {
+                projRight = Vector::From(1, 0, 0);
+                projUp    = Vector::From(0, 1, 0);
+            } else if(args[argn] == "back") {
+                projRight = Vector::From(-1, 0, 0);
+                projUp    = Vector::From(0, 1, 0);
             } else if(args[argn] == "isometric") {
                 projRight = Vector::From(0.707,  0.000, -0.707);
                 projUp    = Vector::From(-0.408, 0.816, -0.408);
@@ -211,13 +211,14 @@ static bool RunCommand(const std::vector<std::string> args) {
             camera.gridFit    = true;
             camera.width      = width;
             camera.height     = height;
-            camera.projUp     = SS.GW.projUp;
-            camera.projRight  = SS.GW.projRight;
+            camera.projUp     = projUp;
+            camera.projRight  = projRight;
 
             SS.GW.projUp      = projUp;
             SS.GW.projRight   = projRight;
             SS.GW.scale       = SS.GW.ZoomToFit(camera);
             camera.scale      = SS.GW.scale;
+            camera.offset     = SS.GW.offset;
             SS.GenerateAll();
 
             CairoPixmapRenderer pixmapCanvas;

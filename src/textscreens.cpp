@@ -143,7 +143,7 @@ void TextWindow::ShowListOfGroups() {
                // Link to the errors, if a problem occurred while solving
                ok ? (warn ? 'm' : (dof > 0 ? 'i' : 's')) : 'x',
                g->h.v, (&TextWindow::ScreenHowGroupSolved),
-               ok ? (warn ? "err" : sdof) : "",
+               ok ? ((warn && SS.checkClosedContour) ? "err" : sdof) : "",
                ok ? "" : "ERR",
                // Link to a screen that gives more details on the group
                g->h.v, (&TextWindow::ScreenSelectGroup), s.c_str());
@@ -576,6 +576,11 @@ void TextWindow::ShowGroupSolveInfo() {
             c->h.v, (&TextWindow::ScreenSelectConstraint),
             (&TextWindow::ScreenHoverConstraint),
             c->DescriptionString().c_str());
+    }
+
+    if(g->solved.timeout) {
+        Printf(true,  "%FxSome items in list have been ommitted%Fd");
+        Printf(false,  "%Fxbecause the operation timed out.%Fd");
     }
 
     Printf(true,  "It may be possible to fix the problem ");
