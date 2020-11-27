@@ -27,6 +27,8 @@ New sketch features:
   * "Split Curves at Intersection" can now split curves at point lying on curve,
     not just at intersection of two curves.
   * Property browser now shows amount of degrees of freedom in group list.
+    It also shows a yellow "err" if the sketch has problems (e.g. self
+    intersecting) that would propagate in subsequent groups.
 
 New constraint features:
   * When dragging an arc or rectangle point, it will be automatically
@@ -47,12 +49,14 @@ New constraint features:
     with a value.
 
 New export/import features:
+  * Link IDF circuit boards in an assembly (.emn files)
   * Three.js: allow configuring projection for exported model, and initially
     use the current viewport projection.
   * Wavefront OBJ: a material file is exported alongside the model, containing
     mesh color information.
   * DXF/DWG: 3D DXF files are imported as construction entities, in 3d.
-  * Q3D: [Q3D](https://github.com/q3k/q3d/) triangle meshes can now be
+  * [ADDED 2019-02-25](https://github.com/solvespace/solvespace/pull/384) and [REMOVED 2020-11-13](https://github.com/solvespace/solvespace/issues/795):
+    Q3D: [Q3D](https://github.com/q3k/q3d/) triangle meshes can now be
     exported. This format allows to easily hack on triangle mesh data created
     in SolveSpace, supports colour information and is more space efficient than
     most other formats.
@@ -81,6 +85,9 @@ New measurement/analysis features:
     workplane is displayed.
 
 Other new features:
+  * Added ExportBackgroundColor in configuration for EPS, PDF, and SVG files.
+  * Improvements to the text window for selected entities and constraints.
+  * Ambient light source added in text window to allow flat shaded renderings.
   * New command-line interface, for batch exporting and more.
   * The graphical interface now supports HiDPI screens on every OS.
   * New option to lock Z axis to be always vertical, like in SketchUp.
@@ -104,8 +111,15 @@ Other new features:
   * On Linux, native file chooser dialog can be used.
   * New edit menu items "Line Styles", "View Projection" and "Configuration"
     that are shortcuts to the respective configuration screens.
+  * New cmake build options using -DENABLE_OPENMP=yes and -DENABLE_LTO=yes
+    to enable support for multi-threading and link-time optimization.
 
 Bugs fixed:
+  * Fixed broken --view options for command line thumbnail image creation.
+  * Some errors in Triangulation of surfaces.
+  * Some NURNS boolean operations that failed particularly on surfaces
+    created with Lathe, Revolve, or Helix.
+  * Segfault in Remove Spline Point context menu.
   * A point in 3d constrained to any line whose length is free no longer
     causes the line length to collapse.
   * Curve-line constraints (in 3d), parallel constraints (in 3d), and
