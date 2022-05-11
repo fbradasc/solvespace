@@ -7,6 +7,7 @@
 #ifndef SOLVESPACE_GUI_H
 #define SOLVESPACE_GUI_H
 
+namespace SolveSpace {
 class RgbaColor;
 
 namespace Platform {
@@ -356,6 +357,7 @@ public:
 
     virtual Platform::Path GetFilename() = 0;
     virtual void SetFilename(Platform::Path path) = 0;
+    virtual void SuggestFilename(Platform::Path path) = 0;
 
     virtual void AddFilter(std::string name, std::vector<std::string> extensions) = 0;
     void AddFilter(const FileFilter &filter);
@@ -385,5 +387,6 @@ void ExitGui();
 void ClearGui();
 
 }
+} // namespace SolveSpace
 
 #endif
