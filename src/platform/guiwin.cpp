@@ -142,7 +142,18 @@ static std::string NegateMnemonics(const std::string &label) {
     return newLabel;
 }
 
-static int Clamp(int x, int a, int b) {
+static int Clamp(int x, int a, int b, int brda, int brdb) {
+    // If we are outside of an edge of the monitor
+    // and a "border" is requested "move in" from that edge
+    // by "b/brdX" (the "b" parameter is the resolution)
+    if((x <= a) && (brda)) {
+        a += b / brda;  // yes "b/brda" since b is the size
+    }
+
+    if(((x >= b) && brdb)) {
+        b -= b / brdb;
+    }
+
     return max(a, min(x, b));
 }
 
@@ -734,6 +745,11 @@ public:
                         event.type   = SixDofEvent::Type::RELEASE;
                         event.button = SixDofEvent::Button::FIT;
                     }
+                } else {
+                    return 0;
+                }
+                if(window->onSixDofEvent) {
+                    window->onSixDofEvent(event);
                 }
                 return 0;
             }
@@ -925,7 +941,7 @@ public:
                         event.y = pt.y / pixelRatio;
 
                         event.type = MouseEvent::Type::SCROLL_VERT;
-                        event.scrollDelta = GET_WHEEL_DELTA_WPARAM(wParam) > 0 ? 1 : -1;
+                        event.scrollDelta = GET_WHEEL_DELTA_WPARAM(wParam) / WHEEL_DELTA;
                         break;
 
                     case WM_MOUSELEAVE:
@@ -1079,7 +1095,7 @@ public:
                         return 0;
                     }
                 } else if(wParam == VK_ESCAPE) {
-                    sscheck(SendMessageW(hWindow, msg, wParam, lParam));
+                    window->HideEditor();
                     return 0;
                 }
         }
@@ -1213,11 +1229,14 @@ public:
         sscheck(GetMonitorInfo(MonitorFromRect(&rc, MONITOR_DEFAULTTONEAREST), &mi));
 
         // If it somehow ended up off-screen, then put it back.
+        // and make it visible by at least this portion of the screen
+        const LONG movein = 40;
+
         RECT mrc = mi.rcMonitor;
-        rc.left   = Clamp(rc.left,   mrc.left, mrc.right);
-        rc.right  = Clamp(rc.right,  mrc.left, mrc.right);
-        rc.top    = Clamp(rc.top,    mrc.top,  mrc.bottom);
-        rc.bottom = Clamp(rc.bottom, mrc.top,  mrc.bottom);
+        rc.left   = Clamp(rc.left,   mrc.left, mrc.right, 0, movein);
+        rc.right  = Clamp(rc.right,  mrc.left, mrc.right, movein, 0);
+        rc.top    = Clamp(rc.top,    mrc.top,  mrc.bottom, 0, movein);
+        rc.bottom = Clamp(rc.bottom, mrc.top,  mrc.bottom, movein, 0);
 
         // And make sure the minimum size is respected. (We can freeze a size smaller
         // than minimum size if the DPI changed between runs.)
@@ -1450,7 +1469,10 @@ public:
     void SetType(Type type) override {
         switch(type) {
             case Type::INFORMATION:
-                style = MB_ICONINFORMATION;
+                style         = MB_USERICON; // Avoid beep
+                mbp.hInstance = GetModuleHandle(NULL);
+                mbp.lpszIcon  = MAKEINTRESOURCE(4000);  // Use SolveSpace icon
+                // mbp.lpszIcon = IDI_INFORMATION;
                 break;
 
             case Type::QUESTION:
@@ -1462,7 +1484,10 @@ public:
                 break;
 
             case Type::ERROR:
-                style = MB_ICONERROR;
+                style         = MB_USERICON; // Avoid beep
+                mbp.hInstance = GetModuleHandle(NULL);
+                mbp.lpszIcon  = MAKEINTRESOURCE(4000); // Use SolveSpace icon
+                // mbp.lpszIcon = IDI_ERROR;
                 break;
         }
     }
@@ -1558,11 +1583,6 @@ public:
         ofn.nMaxFile    = sizeof(filenameWC) / sizeof(wchar_t);
         ofn.Flags       = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY |
                           OFN_OVERWRITEPROMPT;
-        if(isSaveDialog) {
-            SetTitle(C_("title", "Save File"));
-        } else {
-            SetTitle(C_("title", "Open File"));
-        }
     }
 
     void SetTitle(std::string title) override {
@@ -1580,6 +1600,10 @@ public:
 
     void SetFilename(Platform::Path path) override {
         wcsncpy(filenameWC, Widen(path.raw).c_str(), sizeof(filenameWC) / sizeof(wchar_t) - 1);
+    }
+
+    void SuggestFilename(Platform::Path path) override {
+        SetFilename(Platform::Path::From(path.FileStem()));
     }
 
     void AddFilter(std::string name, std::vector<std::string> extensions) override {
@@ -1611,13 +1635,14 @@ public:
     }
 
     bool RunModal() override {
-        if(GetFilename().IsEmpty()) {
-            SetFilename(Path::From(_("untitled")));
-        }
-
         if(isSaveDialog) {
+            SetTitle(C_("title", "Save File"));
+            if(GetFilename().IsEmpty()) {
+                SetFilename(Path::From(_("untitled")));
+            }
             return GetSaveFileNameW(&ofn) == TRUE;
         } else {
+            SetTitle(C_("title", "Open File"));
             return GetOpenFileNameW(&ofn) == TRUE;
         }
     }
