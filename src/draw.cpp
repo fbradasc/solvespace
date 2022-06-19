@@ -185,17 +185,15 @@ void GraphicsWindow::MakeSelected(Selection *stog) {
 
     if(stog->entity.v != 0 && SK.GetEntity(stog->entity)->IsFace()) {
         // In the interest of speed for the triangle drawing code,
-        // only MAX_SELECTABLE_FACES faces may be selected at a time.
-        unsigned int c = 0;
+        // only three faces may be selected at a time.
+        int c = 0;
         Selection *s;
         selection.ClearTags();
         for(s = selection.First(); s; s = selection.NextAfter(s)) {
             hEntity he = s->entity;
             if(he.v != 0 && SK.GetEntity(he)->IsFace()) {
                 c++;
-                // See also GraphicsWindow::GroupSelection "if(e->IsFace())"
-                // and Group::DrawMesh "case DrawMeshAs::SELECTED:"
-                if(c >= MAX_SELECTABLE_FACES) s->tag = 1;
+                if(c >= 3) s->tag = 1;
             }
         }
         selection.RemoveTagged();

@@ -455,9 +455,22 @@ void TextWindow::DescribeSelection() {
     } else if(gs.n == 3 && gs.faces == 3) {
         Printf(false, "%FtTHREE PLANE FACES");
 
-        ListFaces();
+        Vector n0 = SK.GetEntity(gs.face[0])->FaceGetNormalNum();
+        Printf(true,  " planeA normal = " PT_AS_NUM, CO(n0));
+        Vector p0 = SK.GetEntity(gs.face[0])->FaceGetPointNum();
+        Printf(false, "   planeA thru = " PT_AS_STR, COSTR(SK.GetEntity(gs.face[0]), p0));
 
-        // We should probably compute and show the intersection point if there is one.
+        Vector n1 = SK.GetEntity(gs.face[1])->FaceGetNormalNum();
+        Printf(true,  " planeB normal = " PT_AS_NUM, CO(n1));
+        Vector p1 = SK.GetEntity(gs.face[1])->FaceGetPointNum();
+        Printf(false, "   planeB thru = " PT_AS_STR, COSTR(SK.GetEntity(gs.face[1]), p1));
+
+        Vector n2 = SK.GetEntity(gs.face[2])->FaceGetNormalNum();
+        Printf(true,  " planeC normal = " PT_AS_NUM, CO(n2));
+        Vector p2 = SK.GetEntity(gs.face[2])->FaceGetPointNum();
+        Printf(false, "   planeB thru = " PT_AS_STR, COSTR(SK.GetEntity(gs.face[2]), p2));
+
+        // We should probably compute and show the intersection point if there is onw.
 
     } else if(gs.n == 0 && gs.constraints == 1) {
         Constraint *c = SK.GetConstraint(gs.constraint[0]);
