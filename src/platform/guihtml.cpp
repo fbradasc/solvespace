@@ -1232,16 +1232,25 @@ public:
         std::function<void()>* callback = &responseFuncs.back();
         htmlButton.call<void>("addEventListener", val("trigger"), Wrap(callback));
 
+        static std::function<void()> updateShowFlagFunc = [this] {
+            this->is_shown = false;
+        };
+        htmlButton.call<void>("addEventListener", val("trigger"), Wrap(&updateShowFlagFunc));
+
         htmlButtons.call<void>("appendChild", htmlButton);
     }
 
     Response RunModal() {
+        // ssassert(false, "RunModal not supported on Emscripten");
+        dbp("MessageDialog::RunModal() called.");
         this->ShowModal();
         //FIXME(emscripten): use val::await() with JavaScript's Promise
         while (true) {
             if (this->is_shown) {
-                emscripten_sleep(50);
+                dbp("MessageDialog::RunModal(): is_shown == true");
+                emscripten_sleep(2000);
             } else {
+                dbp("MessageDialog::RunModal(): break due to is_shown == false");
                 break;
             }
         }
@@ -1250,6 +1259,7 @@ public:
             return this->latestResponse;
         } else {
             // FIXME(emscripten):
+            dbp("MessageDialog::RunModal(): Cannot get Response.");
             return this->latestResponse;
         }
     }
@@ -1270,67 +1280,138 @@ MessageDialogRef CreateMessageDialog(WindowRef parentWindow) {
 // File dialogs
 //-----------------------------------------------------------------------------
 
-// In emscripten pseudo filesystem, all userdata will be stored in this directory.
-static std::string basePathInFilesystem = "/data/";
-
-
-/* FileDialog that can open, save and browse. Also refer `src/platform/html/filemanagerui.js`.
- */
-class FileDialogImplHtml : public FileDialog {
+class FileOpenDialogImplHtml : public FileDialog {
 public:
-
-    enum class Modes {
-        OPEN = 0,
-        SAVE,
-        BROWSER
-    };
-
-    Modes mode;
-
     std::string title;
     std::string filename;
     std::string filters;
 
-    val jsFileManagerUI;
+    emscripten::val fileUploadHelper;
 
-    FileDialogImplHtml(Modes mode) {
-        dbp("FileDialogImplHtml::FileDialogImplHtml()");
-        val fileManagerUIClass = val::global("window")["FileManagerUI"];
-        val dialogModeValue;
-        this->mode = mode;
-        if (mode == Modes::OPEN) {
-            dialogModeValue = val(0);
-        } else if (mode == Modes::SAVE) {
-            dialogModeValue = val(1);
-        } else {
-            dialogModeValue = val(2);
-        }
-        this->jsFileManagerUI = fileManagerUIClass.new_(dialogModeValue);
-        dbp("FileDialogImplHtml::FileDialogImplHtml() Done.");
+    FileOpenDialogImplHtml() {
+        //FIXME(emscripten):
+        dbp("FileOpenDialogImplHtml::FileOpenDialogImplHtml()");
+        // FIXME(emscripten): workaround. following code raises "constructor is not a constructor" exception.
+        // val fuh = val::global("FileUploadHelper");
+        // this->fileUploadHelper = fuh.new_();
+        this->fileUploadHelper = val::global().call<val>("createFileUploadHelperInstance");
+        dbp("FileOpenDialogImplHtml::FileOpenDialogImplHtml() OK.");
     }
 
-    ~FileDialogImplHtml() override {
-        dbp("FileDialogImplHtml::~FileDialogImplHtml()");
-        this->jsFileManagerUI.call<void>("dispose");
+    ~FileOpenDialogImplHtml() override {
+        dbp("FileOpenDialogImplHtml::~FileOpenDialogImplHtml()");
+        this->fileUploadHelper.call<void>("dispose");
     }
 
     void SetTitle(std::string title) override {
-        dbp("FileDialogImplHtml::SetTitle(): title=\"%s\"", title.c_str());
+        //FIXME(emscripten):
+        dbp("FileOpenDialogImplHtml::SetTitle(): title=%s", title.c_str());
         this->title = title;
-        this->jsFileManagerUI.call<void>("setTitle", val(title));
+        //FIXME(emscripten):
+        this->fileUploadHelper.set("title", val(this->title));
     }
 
     void SetCurrentName(std::string name) override {
-        dbp("FileDialogImplHtml::SetCurrentName(): name=\"%s\", parent=\"%s\"", name.c_str(), this->GetFilename().Parent().raw.c_str());
-      
-        Path filepath = Path::From(name);
-        if (filepath.IsAbsolute()) {
-            // dbp("FileDialogImplHtml::SetCurrentName(): path is absolute.");
-            SetFilename(filepath);
-        } else {
-            // dbp("FileDialogImplHtml::SetCurrentName(): path is relative.");
-            SetFilename(GetFilename().Parent().Join(name));
+        //FIXME(emscripten):
+        dbp("FileOpenDialogImplHtml::SetCurrentName(): name=%s", name.c_str());
+        SetFilename(GetFilename().Parent().Join(name));
+    }
+
+    Platform::Path GetFilename() override {
+        //FIXME(emscripten):
+        dbp("FileOpenDialogImplHtml::GetFilename()");
+        return Platform::Path::From(this->filename.c_str());
+    }
+
+    void SetFilename(Platform::Path path) override {
+        //FIXME(emscripten):
+        dbp("FileOpenDialogImplHtml::SetFilename(): path=%s", path.raw.c_str());
+        this->filename = path.raw;
+        //FIXME(emscripten):
+        this->fileUploadHelper.set("filename", val(this->filename));
+    }
+    
+    void SuggestFilename(Platform::Path path) override {
+        //FIXME(emscripten):
+        dbp("FileOpenDialogImplHtml::SuggestFilename(): path=%s", path.raw.c_str());
+        SetFilename(Platform::Path::From(path.FileStem()));
+    }
+
+    void AddFilter(std::string name, std::vector<std::string> extensions) override {
+        //FIXME(emscripten):
+        dbp("FileOpenDialogImplHtml::AddFilter()");
+        this->filters = "";
+        for (auto extension : extensions) {
+            this->filters = "." + extension;
+            this->filters += ",";
         }
+        dbp("filter=%s", this->filters.c_str());
+    }
+
+    void FreezeChoices(SettingsRef settings, const std::string &key) override {
+        //FIXME(emscripten):
+        dbp("FileOpenDialogImplHtml::FreezeChoise()");
+    }
+
+    void ThawChoices(SettingsRef settings, const std::string &key) override {
+        //FIXME(emscripten):
+        dbp("FileOpenDialogImplHtml::ThawChoices()");
+    }
+
+    bool RunModal() override {
+        //FIXME(emscripten):
+        dbp("FileOpenDialogImplHtml::RunModal()");
+        this->filename = "untitled.slvs";
+        this->fileUploadHelper.call<void>("showDialog");
+
+        //FIXME(emscripten): use val::await() with JavaScript's Promise
+        dbp("FileOpenDialogImplHtml: start loop");
+        // Wait until fileUploadHelper.is_shown == false
+        while (true) {
+            bool is_shown = this->fileUploadHelper["is_shown"].as<bool>();
+            if (!is_shown) {
+                dbp("FileOpenDialogImplHtml: break due to is_shown == false");
+                break;
+            } else {
+                // dbp("FileOpenDialogImplHtml: sleep 100msec... (%d)", is_shown);
+                emscripten_sleep(100);
+            }
+        }
+
+        val selectedFilenameVal = this->fileUploadHelper["currentFilename"];
+
+        if (selectedFilenameVal == val::null()) {
+            dbp("selectedFilenameVal is null");
+            return false;
+        } else {
+            std::string selectedFilename = selectedFilenameVal.as<std::string>();
+            this->filename = selectedFilename;
+            return true;
+        }
+    }
+};
+
+class FileSaveDummyDialogImplHtml : public FileDialog {
+public:
+    std::string title;
+    std::string filename;
+    std::string filters;
+
+    FileSaveDummyDialogImplHtml() {
+
+
+    }
+
+    ~FileSaveDummyDialogImplHtml() override {
+
+    }
+
+    void SetTitle(std::string title) override {
+        this->title = title;
+    }
+
+    void SetCurrentName(std::string name) override {
+        SetFilename(GetFilename().Parent().Join(name));
     }
 
     Platform::Path GetFilename() override {
@@ -1338,29 +1419,20 @@ public:
     }
 
     void SetFilename(Platform::Path path) override {
-        dbp("FileDialogImplHtml::GetFilename(): path=\"%s\"", path.raw.c_str());
-        this->filename = std::string(path.raw);
-        std::string filename_ = Path::From(this->filename).FileName();
-        this->jsFileManagerUI.call<void>("setDefaultFilename", val(filename_));
+        this->filename = path.raw;
     }
     
     void SuggestFilename(Platform::Path path) override {
-        dbp("FileDialogImplHtml::SuggestFilename(): path=\"%s\"", path.raw.c_str());
         SetFilename(Platform::Path::From(path.FileStem()));
     }
 
     void AddFilter(std::string name, std::vector<std::string> extensions) override {
-        if (this->filters.length() > 0) {
+        this->filters = "";
+        for (auto extension : extensions) {
+            this->filters = "." + extension;
             this->filters += ",";
         }
-        for (size_t i = 0; i < extensions.size(); i++) {
-            if (i != 0) {
-                this->filters += ",";
-            }
-            this->filters += "." + extensions[i];
-        }
-        dbp("FileDialogImplHtml::AddFilter(): filter=%s", this->filters.c_str());
-        this->jsFileManagerUI.call<void>("setFilter", val(this->filters));
+        dbp("filter=%s", this->filters.c_str());
     }
 
     void FreezeChoices(SettingsRef settings, const std::string &key) override {
@@ -1368,49 +1440,27 @@ public:
     }
 
     void ThawChoices(SettingsRef settings, const std::string &key) override {
-        //FIXME(emscripten): implement
+        
     }
 
     bool RunModal() override {
-        dbp("FileDialogImplHtml::RunModal()");
-
-        this->jsFileManagerUI.call<void>("setBasePath", val(basePathInFilesystem));
-        this->jsFileManagerUI.call<void>("show");
-        while (true) {
-            bool isShown = this->jsFileManagerUI.call<bool>("isShown");
-            if (!isShown) {
-                break;
-            } else {
-                emscripten_sleep(50);
-            }
+        if (this->filename.length() < 1) {
+            this->filename = "untitled.slvs";
         }
-
-        dbp("FileSaveDialogImplHtml::RunModal() : dialog closed.");
-
-        std::string selectedFilename = this->jsFileManagerUI.call<std::string>("getSelectedFilename");
-        if (selectedFilename.length() > 0) {
-            // Dummy call to set parent directory
-            this->SetFilename(Path::From(basePathInFilesystem + "/dummy"));
-            this->SetCurrentName(selectedFilename);
-        }
-
-
-        if (selectedFilename.length() > 0) {
-            return true;
-        } else {
-            return false;
-        }
+        return true;
     }
 };
 
 FileDialogRef CreateOpenFileDialog(WindowRef parentWindow) {
+    // FIXME(emscripten): implement
     dbp("CreateOpenFileDialog()");
-    return std::shared_ptr<FileDialogImplHtml>(new FileDialogImplHtml(FileDialogImplHtml::Modes::OPEN));
+    return std::shared_ptr<FileOpenDialogImplHtml>(new FileOpenDialogImplHtml());
 }
 
 FileDialogRef CreateSaveFileDialog(WindowRef parentWindow) {
+    // FIXME(emscripten): implement
     dbp("CreateSaveFileDialog()");
-    return std::shared_ptr<FileDialogImplHtml>(new FileDialogImplHtml(FileDialogImplHtml::Modes::SAVE));
+    return std::shared_ptr<FileSaveDummyDialogImplHtml>(new FileSaveDummyDialogImplHtml());
 }
 
 //-----------------------------------------------------------------------------
@@ -1428,7 +1478,7 @@ void OpenInBrowser(const std::string &url) {
 
 void OnSaveFinishedCallback(const Platform::Path& filename, bool is_saveAs, bool is_autosave) {
     dbp("OnSaveFinished(): %s, is_saveAs=%d, is_autosave=%d\n", filename.FileName().c_str(), is_saveAs, is_autosave);
-    std::string filename_str = filename.raw;
+    std::string filename_str = filename.FileName();
     EM_ASM(saveFileDone(UTF8ToString($0), $1, $2), filename_str.c_str(), is_saveAs, is_autosave);
 }
 
@@ -1437,7 +1487,7 @@ std::vector<std::string> InitGui(int argc, char **argv) {
     val::global("window").call<void>("addEventListener", val("beforeunload"),
                                      Wrap(&onBeforeUnload));
 
-    // dbp("Set onSaveFinished");
+    dbp("Set onSaveFinished");
     SS.OnSaveFinished = OnSaveFinishedCallback;
 
     // FIXME(emscripten): get locale from user preferences
