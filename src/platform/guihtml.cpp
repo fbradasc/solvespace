@@ -346,7 +346,6 @@ MenuBarRef GetOrCreateMainMenu(bool *unique) {
 
 class TouchEventHelper {
 public:
-    // FIXME(emscripten): Workaround. touchstart and touchend repeats two times.
     bool touchActionStarted = false;
 
     int previousNumTouches = 0;
@@ -357,10 +356,10 @@ public:
     // double startPinchDistance = 0;
     double previousPinchDistance = 0;
 
-    std::function<void(MouseEvent*, void*)> onPointerDown;
-    std::function<void(MouseEvent*, void*)> onPointerMove;
-    std::function<void(MouseEvent*, void*)> onPointerUp;
-    std::function<void(MouseEvent*, void*)> onScroll;
+    std::function<void(MouseEvent*)> onPointerDown;
+    std::function<void(MouseEvent*)> onPointerMove;
+    std::function<void(MouseEvent*)> onPointerUp;
+    std::function<void(MouseEvent*)> onScroll;
 
     void clear(void) {
         touchActionStarted = false;
@@ -371,31 +370,43 @@ public:
         previousPinchDistance = 0;
     }
 
-    void calculateCenterPosition(const EmscriptenTouchEvent& emEvent, double& dst_x, double& dst_y) {
-        double x = 0;
-        double y = 0;
-        for (int i = 0; i < emEvent.numTouches; i++) {
-            x += emEvent.touches[i].targetX;
-            y += emEvent.touches[i].targetY;
-        }
-        dst_x = x / emEvent.numTouches;
-        dst_y = y / emEvent.numTouches;
-    }
-
-    void calculatePinchDistance(const EmscriptenTouchEvent& emEvent, double& dst_distance) {
-        if (emEvent.numTouches < 2) {
+    void calculateCenterPosition(const EmscriptenTouchEvent *emEvent, double* dst_x, double* dst_y) {
+        if (!emEvent) {
             return;
         }
-        double x1 = emEvent.touches[0].targetX;
-        double y1 = emEvent.touches[0].targetY;
-        double x2 = emEvent.touches[1].targetX;
-        double y2 = emEvent.touches[1].targetY;
-        dst_distance = std::sqrt(std::pow(x1 - x2, 2) + std::pow(y1 - y2, 2));
+        double x = 0;
+        double y = 0;
+        for (int i = 0; i < emEvent->numTouches; i++) {
+            x += emEvent->touches[i].clientX;
+            y += emEvent->touches[i].clientY;
+        }
+        if (dst_x) {
+            *dst_x = x / emEvent->numTouches;
+        }
+        if (dst_y) {
+            *dst_y = y / emEvent->numTouches;
+        }
+    }
+
+    void calculatePinchDistance(const EmscriptenTouchEvent *emEvent, double* dst_distance) {
+        if (!emEvent) {
+            return;
+        }
+        if (emEvent->numTouches < 2) {
+            return;
+        }
+        double x1 = emEvent->touches[0].clientX;
+        double y1 = emEvent->touches[0].clientY;
+        double x2 = emEvent->touches[1].clientX;
+        double y2 = emEvent->touches[1].clientY;
+        if (dst_distance) {
+            *dst_distance = std::sqrt(std::pow(x1 - x2, 2) + std::pow(y1 - y2, 2));
+        }
     }
 
     void createMouseEventPRESS(const EmscriptenTouchEvent& emEvent, MouseEvent& dst_mouseevent) {
         double x = 0, y = 0;
-        this->calculateCenterPosition(emEvent, x, y);
+        this->calculateCenterPosition(&emEvent, &x, &y);
         this->centerX = x;
         this->centerY = y;
         this->touchActionStarted = true;
@@ -412,7 +423,7 @@ public:
         case 2: {
             dst_mouseevent.button = MouseEvent::Button::RIGHT;
             // double distance = 0;
-            this->calculatePinchDistance(emEvent, this->previousPinchDistance);
+            this->calculatePinchDistance(&emEvent, &this->previousPinchDistance);
             // this->startPinchDistance = distance;
             // this->previousPinchDistance = distance;
             break;
@@ -423,57 +434,68 @@ public:
         }
     }
 
-    void createMouseEventRELEASE(const EmscriptenTouchEvent& emEvent, MouseEvent& dst_mouseevent) {
-        this->calculateCenterPosition(emEvent, this->centerX, this->centerY);
+    bool createMouseEventRELEASE(const EmscriptenTouchEvent &emEvent, MouseEvent* dst_mouseevent) {
+        double x = 0, y = 0;
+        this->calculateCenterPosition(&emEvent, &x, &y);
+        this->centerX = x;
+        this->centerY = y;
         this->previousNumTouches = 0;
-        dst_mouseevent.type = MouseEvent::Type::RELEASE;
-        dst_mouseevent.x = this->centerX;
-        dst_mouseevent.y = this->centerY;
-        dst_mouseevent.shiftDown = emEvent.shiftKey;
-        dst_mouseevent.controlDown = emEvent.ctrlKey;
+        dst_mouseevent->type = MouseEvent::Type::RELEASE;
+        dst_mouseevent->x = x;
+        dst_mouseevent->y = y;
+        dst_mouseevent->shiftDown = emEvent.shiftKey;
+        dst_mouseevent->controlDown = emEvent.ctrlKey;
         switch(this->previousNumTouches) {
         case 1:
-            dst_mouseevent.button = MouseEvent::Button::LEFT;
+            dst_mouseevent->button = MouseEvent::Button::LEFT;
             break;
         case 2:
-            dst_mouseevent.button = MouseEvent::Button::RIGHT;
+            dst_mouseevent->button = MouseEvent::Button::RIGHT;
             break;
         default:
-            dst_mouseevent.button = MouseEvent::Button::MIDDLE;
+            dst_mouseevent->button = MouseEvent::Button::MIDDLE;
             break;
         }
+        return true;
+
     }
 
-    void createMouseEventMOTION(const EmscriptenTouchEvent& emEvent, MouseEvent& dst_mouseevent) {
-        dst_mouseevent.type = MouseEvent::Type::MOTION;
-        this->calculateCenterPosition(emEvent, this->centerX, this->centerY);
-        dst_mouseevent.x = this->centerX;
-        dst_mouseevent.y = this->centerY;
-        dst_mouseevent.shiftDown = emEvent.shiftKey;
-        dst_mouseevent.controlDown = emEvent.ctrlKey;
-        switch(emEvent.numTouches) {
+    bool createMouseEventMOTION(const EmscriptenTouchEvent *emEvent, MouseEvent* dst_mouseevent) {
+        dst_mouseevent->type = MouseEvent::Type::MOTION;
+        double x = 0, y = 0;
+        this->calculateCenterPosition(emEvent, &x, &y);
+        this->centerX = x;
+        this->centerY = y;
+        dst_mouseevent->x = this->centerX;
+        dst_mouseevent->y = this->centerY;
+        dst_mouseevent->shiftDown = emEvent->shiftKey;
+        dst_mouseevent->controlDown = emEvent->ctrlKey;
+        switch(emEvent->numTouches) {
         case 1:
-            dst_mouseevent.button = MouseEvent::Button::LEFT;
+            dst_mouseevent->button = MouseEvent::Button::LEFT;
             break;
         case 2:
-            dst_mouseevent.button = MouseEvent::Button::RIGHT;
+            dst_mouseevent->button = MouseEvent::Button::RIGHT;
             break;
         default:
-            dst_mouseevent.button = MouseEvent::Button::MIDDLE;
+            dst_mouseevent->button = MouseEvent::Button::MIDDLE;
             break;
         }
+        return true;
     }
 
-    void createMouseEventSCROLL(const EmscriptenTouchEvent& emEvent, MouseEvent& event) {
+    bool createMouseEventSCROLL(const EmscriptenTouchEvent* emEvent, MouseEvent& event) {
         event.type = MouseEvent::Type::SCROLL_VERT;
         double newDistance = 0;
-        this->calculatePinchDistance(emEvent, newDistance);
-        this->calculateCenterPosition(emEvent, this->centerX, this->centerY);
+        this->calculatePinchDistance(emEvent, &newDistance);
+        double x = 0, y = 0;
+        this->calculateCenterPosition(emEvent, &x, &y);
+        this->centerX = x;
+        this->centerY = y;
         event.x = this->centerX;
         event.y = this->centerY;
-        event.shiftDown = emEvent.shiftKey;
-        event.controlDown = emEvent.ctrlKey;
-        // FIXME(emscripten): best value range for scrollDelta ?
+        event.shiftDown = emEvent->shiftKey;
+        event.controlDown = emEvent->ctrlKey;
         event.scrollDelta = (newDistance - this->previousPinchDistance) / 25.0;
         if (std::abs(event.scrollDelta) > 2) {
             event.scrollDelta = 2;
@@ -482,84 +504,180 @@ public:
             }
         }
         this->previousPinchDistance = newDistance;
+        return true;
     }
 
-    void onTouchStart(const EmscriptenTouchEvent& emEvent, void* callbackParameter) {
+    void onTouchStart(const EmscriptenTouchEvent *emEvent) {
+        if (!emEvent) {
+            return;
+        }
         if (this->touchActionStarted) {
-            // dbp("onTouchStart(): Break due to already started.");
+            dbp("onTouchStart(): Break due to already started.");
             return;
         }
 
         MouseEvent event;
-        this->createMouseEventPRESS(emEvent, event);
-        this->previousNumTouches = emEvent.numTouches;
+        this->createMouseEventPRESS(*emEvent, event);
+        this->previousNumTouches = emEvent->numTouches;
         if (this->onPointerDown) {
-            // dbp("onPointerDown(): numTouches=%d, timestamp=%f", emEvent.numTouches, emEvent.timestamp);
-            this->onPointerDown(&event, callbackParameter);
+            dbp("onPointerDown(): numTouches=%d, timestamp=%f", emEvent->numTouches, emEvent->timestamp);
+            this->onPointerDown(&event);
         }
     }
 
-    void onTouchMove(const EmscriptenTouchEvent& emEvent, void* callbackParameter) {
-        this->calculateCenterPosition(emEvent, this->centerX, this->centerY);
-        int newNumTouches = emEvent.numTouches;
+    void onTouchMove(const EmscriptenTouchEvent *emEvent) {
+        if (!emEvent) {
+            return;
+        }
+        this->calculateCenterPosition(emEvent, &this->centerX, &this->centerY);
+        int newNumTouches = emEvent->numTouches;
         if (newNumTouches != this->previousNumTouches) {
-            MouseEvent releaseEvent;
-
-            this->createMouseEventRELEASE(emEvent, releaseEvent);
+            // MouseEvent event = { };
+            // event.type = MouseEvent::Type::RELEASE;
+            // event.x = this->centerX;
+            // event.y = this->centerY;
+            // event.shiftDown = emEvent->shiftKey;
+            // event.controlDown = emEvent->ctrlKey;
+            // switch(this->previousNumTouches) {
+            // case 1:
+            //     event.button = MouseEvent::Button::LEFT;
+            //     break;
+            // case 2:
+            //     event.button = MouseEvent::Button::RIGHT;
+            //     {
+            //         double distance = 0;
+            //         this->calculatePinchDistance(emEvent, &distance);
+            //         this->startPinchDistance = distance;
+            //         this->previousPinchDistance = this->startPinchDistance;
+            //     }
+            //     break;
+            // default:
+            //     event.button = MouseEvent::Button::MIDDLE;
+            //     break;
+            // }
+            MouseEvent event;
+            if (!this->createMouseEventRELEASE(*emEvent, &event)) {
+                dbp("Failed to createMouseEventRELEASE() at L%d", __LINE__);
+                return;
+            }
             if (this->onPointerUp) {
-                // dbp("onPointerUp(): numTouches=%d, timestamp=%f", emEvent.numTouches, emEvent.timestamp);
-                this->onPointerUp(&releaseEvent, callbackParameter);
+                dbp("onPointerUp(): numTouches=%d, timestamp=%f", emEvent->numTouches, emEvent->timestamp);
+                this->onPointerUp(&event);
             }
 
-            MouseEvent pressEvent;
-
-            this->createMouseEventPRESS(emEvent, pressEvent);
+            // event.type = MouseEvent::Type::PRESS;
+            // switch(emEvent->numTouches) {
+            // case 1:
+            //     event.button = MouseEvent::Button::LEFT;
+            //     break;
+            // case 2:
+            //     event.button = MouseEvent::Button::RIGHT;
+            //     break;
+            // default:
+            //     event.button = MouseEvent::Button::MIDDLE;
+            //     break;
+            // }
+            // if (!this->createMouseEventPRESS(emEvent, &event)) {
+            //     dbp("Failed to createMouseEventPRESS() at L%d", __LINE__);
+            //     return;
+            // }
+            
+            this->createMouseEventPRESS(*emEvent, event);
             if (this->onPointerDown) {
-                // dbp("onPointerDown(): numTouches=%d, timestamp=%f", emEvent.numTouches, emEvent.timestamp);
-                this->onPointerDown(&pressEvent, callbackParameter);
+                dbp("onPointerDown(): numTouches=%d, timestamp=%f", emEvent->numTouches, emEvent->timestamp);
+                this->onPointerDown(&event);
             }
         }
 
-        MouseEvent motionEvent = { };
-        this->createMouseEventMOTION(emEvent, motionEvent);
+        MouseEvent event = { };
+        // event.type = MouseEvent::Type::MOTION;
+        // event.x = this->centerX;
+        // event.y = this->centerY;
+        // event.shiftDown = emEvent->shiftKey;
+        // event.controlDown = emEvent->ctrlKey;
+        // switch(emEvent->numTouches) {
+        // case 1:
+        //     event.button = MouseEvent::Button::LEFT;
+        //     break;
+        // case 2:
+        //     event.button = MouseEvent::Button::RIGHT;
+        //     break;
+        // default:
+        //     event.button = MouseEvent::Button::MIDDLE;
+        //     break;
+        // }
+        this->createMouseEventMOTION(emEvent, &event);
 
         if (this->onPointerMove) {
-            // dbp("onPointerMove(): numTouches=%d, timestamp=%f", emEvent.numTouches, emEvent.timestamp);
-            this->onPointerMove(&motionEvent, callbackParameter);
+            dbp("onPointerMove(): numTouches=%d, timestamp=%f", emEvent->numTouches, emEvent->timestamp);
+            this->onPointerMove(&event);
         }
 
-        if (emEvent.numTouches == 2) {
-            MouseEvent scrollEvent;
-            this->createMouseEventSCROLL(emEvent, scrollEvent);
-            if (scrollEvent.scrollDelta != 0) {
-                if (this->onScroll) {
-                    // dbp("Scroll %f", scrollEvent.scrollDelta);
-                    this->onScroll(&scrollEvent, callbackParameter);
+        if (emEvent->numTouches == 2) {
+            // double newDistance = 0;
+            // this->calculatePinchDistance(emEvent, &newDistance);
+            // if (newDistance != this->previousPinchDistance) {
+            //     dbp("Scroll %f", (newDistance - this->previousPinchDistance));
+            //     MouseEvent scrollEvent = { };
+            //     scrollEvent.type = MouseEvent::Type::SCROLL_VERT;
+            //     scrollEvent.scrollDelta = (newDistance - this->previousPinchDistance) / 10.0;
+            //     if (this->onScroll) {
+            //         this->onScroll(&scrollEvent);
+            //     }
+            //     this->previousPinchDistance = newDistance;
+            // }
+            MouseEvent event;
+            if (this->createMouseEventSCROLL(emEvent, event)) {
+                if (event.scrollDelta != 0) {
+                    if (this->onScroll) {
+                        dbp("Scroll %f", event.scrollDelta);
+                        this->onScroll(&event);
+                    }
                 }
             }
         }
 
-        this->previousNumTouches = emEvent.numTouches;
+        this->previousNumTouches = emEvent->numTouches;
     }
 
-    void onTouchEnd(const EmscriptenTouchEvent& emEvent, void* callbackParameter) {
+    void onTouchEnd(const EmscriptenTouchEvent *emEvent) {
+        if (!emEvent) {
+            return;
+        }
         if (!this->touchActionStarted) {
             return;
         }
 
-        MouseEvent releaseEvent = { };
-        this->createMouseEventRELEASE(emEvent, releaseEvent);
+        MouseEvent event = { };
+        // event.type = MouseEvent::Type::RELEASE;
+        // event.x = this->centerX;
+        // event.y = this->centerY;
+        // event.shiftDown = emEvent->shiftKey;
+        // event.controlDown = emEvent->ctrlKey;
+        // switch(this->previousNumTouches) {
+        // case 1:
+        //     event.button = MouseEvent::Button::LEFT;
+        //     break;
+        // case 2:
+        //     event.button = MouseEvent::Button::RIGHT;
+        //     break;
+        // default:
+        //     event.button = MouseEvent::Button::MIDDLE;
+        //     break;
+        // }
+
+        this->createMouseEventRELEASE(*emEvent, &event);
         
         if (this->onPointerUp) {
-            // dbp("onPointerUp(): numTouches=%d, timestamp=%d", emEvent.numTouches, emEvent.timestamp);
-            this->onPointerUp(&releaseEvent, callbackParameter);
+            dbp("onPointerUp(): numTouches=%d, timestamp=%d", emEvent->numTouches, emEvent->timestamp);
+            this->onPointerUp(&event);
         }
 
         this->clear();
     }
 
-    void onTouchCancel(const EmscriptenTouchEvent& emEvent, void* callbackParameter) {
-        this->onTouchEnd(emEvent, callbackParameter);
+    void onTouchCancel(const EmscriptenTouchEvent *emEvent) {
+        this->onTouchEnd(emEvent);
     }
 };
 
@@ -640,18 +758,21 @@ public:
                     emCanvasSel.c_str(), this, /*useCapture=*/false,
                     WindowImplHtml::MouseCallback));
 
-        sscheck(emscripten_set_touchstart_callback(
-                    emCanvasSel.c_str(), this, /*useCapture=*/false,
-                    WindowImplHtml::TouchCallback));
-        sscheck(emscripten_set_touchmove_callback(
-                    emCanvasSel.c_str(), this, /*useCapture=*/false,
-                    WindowImplHtml::TouchCallback));
-        sscheck(emscripten_set_touchend_callback(
-                    emCanvasSel.c_str(), this, /*useCapture=*/false,
-                    WindowImplHtml::TouchCallback));
-        sscheck(emscripten_set_touchcancel_callback(
-                    emCanvasSel.c_str(), this, /*useCapture=*/false,
-                    WindowImplHtml::TouchCallback));
+        {
+            std::string altCanvasSelector = "#canvas0";
+            sscheck(emscripten_set_touchstart_callback(
+                        altCanvasSelector.c_str(), this, /*useCapture=*/false,
+                        WindowImplHtml::TouchCallback));
+            sscheck(emscripten_set_touchmove_callback(
+                        altCanvasSelector.c_str(), this, /*useCapture=*/false,
+                        WindowImplHtml::TouchCallback));
+            sscheck(emscripten_set_touchend_callback(
+                        altCanvasSelector.c_str(), this, /*useCapture=*/false,
+                        WindowImplHtml::TouchCallback));
+            sscheck(emscripten_set_touchcancel_callback(
+                        altCanvasSelector.c_str(), this, /*useCapture=*/false,
+                        WindowImplHtml::TouchCallback));
+        }
 
         sscheck(emscripten_set_wheel_callback(
                     emCanvasSel.c_str(), this, /*useCapture=*/false,
@@ -753,26 +874,22 @@ public:
         WindowImplHtml *window = (WindowImplHtml *)data;
 
         if (!initialized) {
-            touchEventHelper.onPointerDown = [](MouseEvent* event, void* param) -> void {
-                WindowImplHtml* window = (WindowImplHtml*)param;
+            touchEventHelper.onPointerDown = [window](MouseEvent* event) -> void {
                 if (window->onMouseEvent) {
                     window->onMouseEvent(*event);
                 }
             };
-            touchEventHelper.onPointerMove = [](MouseEvent* event, void* param) -> void {
-                WindowImplHtml* window = (WindowImplHtml*)param;
+            touchEventHelper.onPointerMove = [window](MouseEvent* event) -> void {
                 if (window->onMouseEvent) {
                     window->onMouseEvent(*event);
                 }
             };
-            touchEventHelper.onPointerUp = [](MouseEvent* event, void* param) -> void {
-                WindowImplHtml* window = (WindowImplHtml*)param;
+            touchEventHelper.onPointerUp = [window](MouseEvent* event) -> void {
                 if (window->onMouseEvent) {
                     window->onMouseEvent(*event);
                 }
             };
-            touchEventHelper.onScroll = [](MouseEvent* event, void* param) -> void {
-                WindowImplHtml* window = (WindowImplHtml*)param;
+            touchEventHelper.onScroll = [window](MouseEvent* event) -> void {
                 if (window->onMouseEvent) {
                     window->onMouseEvent(*event);
                 }
@@ -782,16 +899,16 @@ public:
 
         switch(emEventType) {
             case EMSCRIPTEN_EVENT_TOUCHSTART:
-                touchEventHelper.onTouchStart(*emEvent, window);
+                touchEventHelper.onTouchStart(emEvent);
                 break;
             case EMSCRIPTEN_EVENT_TOUCHMOVE:
-                touchEventHelper.onTouchMove(*emEvent, window);
+                touchEventHelper.onTouchMove(emEvent);
                 break;
             case EMSCRIPTEN_EVENT_TOUCHEND:
-                touchEventHelper.onTouchEnd(*emEvent, window);
+                touchEventHelper.onTouchEnd(emEvent);
                 break;
             case EMSCRIPTEN_EVENT_TOUCHCANCEL:
-                touchEventHelper.onTouchCancel(*emEvent, window);
+                touchEventHelper.onTouchCancel(emEvent);
                 break;
             default:
                 return EM_FALSE;
