@@ -33,34 +33,6 @@ function GetCurrentDateTimeString() {
             `_` + `${padLeft2(now.getHours())}${padLeft2(now.getMinutes())}`);
 }
 
-/* String helpers */
-
-/** 
- * @param {string} s - original string
- * @param {number} digits - char length of generating string
- * @param {string} ch - string to be used for padding
- * @return {string} generated string ($digits chars length) or $s
- */
-function stringPadLeft(s, digits, ch) {
-    if (s.length > digits) {
-        return s;
-    }
-    for (let i = s.length; i < digits; i++) {
-        s = ch + s;
-    }
-    return s;
-}
-
-/** Generate a string expression of now
- * @return {string} like a "2022_08_31_2245" string (for 2022-08-31 22:45; local time)
- */
-function GetCurrentDateTimeString() {
-    const now = new Date();
-    const padLeft2 = (num) => { return stringPadLeft(num.toString(), 2, '0') };
-    return (`${now.getFullYear()}_${padLeft2(now.getMonth()+1)}_${padLeft2(now.getDate())}` +
-            `_` + `${padLeft2(now.getHours())}${padLeft2(now.getMinutes())}`);
-}
-
 /* CSS helpers */
 function hasClass(element, className) {
     return element.classList.contains(className);
@@ -718,3 +690,123 @@ function saveFileDone(filename, isSaveAs, isAutosave) {
     fileDownloadHelper.showDialog();
     console.log(`shoDialog() finished.`);
 }
+
+
+class ScrollbarHelper {
+    /**
+     * @param {HTMLElement} elementquery CSS query string for the element that has scrollbar.
+     */
+    constructor(elementquery) {
+        this.target = document.querySelector(elementquery);
+        this.rangeMin = 0;
+        this.rangeMax = 0;
+        this.currentRatio = 0;
+
+        this.onScrollCallback = null;
+        this.onScrollCallbackTicking = false;
+        if (this.target) {
+            // console.log("addEventListner scroll");
+            this.target.parentElement.addEventListener('scroll', () => {
+                if (this.onScrollCallbackTicking) {
+                    return;
+                }
+                window.requestAnimationFrame(() => {
+                    if (this.onScrollCallback) {
+                        this.onScrollCallback();
+                    }
+                    this.onScrollCallbackTicking = false;
+                });
+                this.onScrollCallbackTicking = true;
+            });
+        }
+    }
+
+    /**
+     * 
+     * @param {number} ratio how long against to the viewport height (1.0 to exact same as viewport's height)
+     */
+    setScrollbarSize(ratio) {
+        // if (isNaN(ratio)) {
+        //     console.warn(`setScrollbarSize(): ratio is Nan = ${ratio}`);
+        // }
+        // if (ratio < 0 || ratio > 1) {
+        //     console.warn(`setScrollbarSize(): ratio is out of range 0-1 but ${ratio}`);
+        // }
+        // console.log(`ScrollbarHelper.setScrollbarSize(): ratio=${ratio}`);
+        this.target.style.height = `${100 * ratio}%`;
+    }
+
+    getScrollbarPosition() {
+        const scrollbarElem = this.target.parentElement;
+        const scrollTopMin = 0;
+        const scrollTopMax = scrollbarElem.scrollHeight - scrollbarElem.clientHeight;
+        const ratioOnScrollbar = (scrollbarElem.scrollTop - scrollTopMin) / (scrollTopMax - scrollTopMin);
+        this.currentRatio = (scrollbarElem.scrollTop - scrollTopMin) / (scrollTopMax - scrollTopMin);
+        let pos = this.currentRatio * (this.rangeMax - this.pageSize - this.rangeMin) + this.rangeMin;
+        // console.log(`ScrollbarHelper.getScrollbarPosition(): ratio=${ratioOnScrollbar}, pos=${pos}, scrollTop=${scrollbarElem.scrollTop}, scrollTopMin=${scrollTopMin}, scrollTopMax=${scrollTopMax}, rangeMin=${this.rangeMin}, rangeMax=${this.rangeMax}, pageSize=${this.pageSize}`);
+        if (isNaN(pos)) {
+            return 0;
+        } else {
+            return pos;
+        }
+    }
+
+    /**
+     * @param {number} value in range of rangeMin and rangeMax
+     */
+    setScrollbarPosition(position) {
+        const positionMin = this.rangeMin;
+        const positionMax = this.rangeMax - this.pageSize;
+        const currentPositionRatio = (position - positionMin) / (positionMax - positionMin);
+
+        const scrollbarElement = this.target.parentElement;
+        const scrollTopMin = 0;
+        const scrollTopMax = scrollbarElement.scrollHeight - scrollbarElement.clientHeight;
+        const scrollWidth = scrollTopMax - scrollTopMin;
+        const newScrollTop = currentPositionRatio * scrollWidth;
+        scrollbarElement.scrollTop = currentPositionRatio * scrollWidth;
+
+        // console.log(`ScrollbarHelper.setScrollbarPosition(): pos=${position}, currentPositionRatio=${currentPositionRatio}, calculated scrollTop=${newScrollTop}`);
+
+        if (false) {
+        // const ratio = (position - this.rangeMin) * ((this.rangeMax - this.pageSize) - this.rangeMin);
+
+        const scrollTopMin = 0;
+        const scrollTopMax = this.target.scrollHeight - this.target.clientHeight;
+        const scrollWidth = scrollTopMax - scrollTopMin;
+        const newScrollTop = ratio * scrollWidth;
+        // this.target.parentElement.scrollTop = ratio * scrollWidth;
+        this.target.scrollTop = ratio * scrollWidth;
+
+        console.log(`ScrollbarHelper.setScrollbarPosition(): pos=${position}, ratio=${ratio}, calculated scrollTop=${newScrollTop}`);
+        }
+    }
+
+    /** */
+    setRange(min, max, pageSize) {
+        this.rangeMin = min;
+        this.rangeMax = max;
+        this.currentRatio = 0;
+
+        this.setPageSize(pageSize);
+    }
+
+    setPageSize(pageSize) {
+        if (this.rangeMin == this.rangeMax) {
+            // console.log(`ScrollbarHelper::setPageSize(): size=${size}, but rangeMin == rangeMax`);
+            return;
+        }
+        this.pageSize = pageSize;
+        const ratio = (this.rangeMax - this.rangeMin) / this.pageSize;
+        // console.log(`ScrollbarHelper::setPageSize(): pageSize=${pageSize}, ratio=${ratio}`);
+        this.setScrollbarSize(ratio);
+    }
+
+    setScrollbarEnabled(enabled) {
+        if (!enabled) {
+            this.target.style.height = "100%";
+        }
+    }
+};
+
+window.ScrollbarHelper = ScrollbarHelper;

@@ -375,8 +375,8 @@ public:
         double x = 0;
         double y = 0;
         for (int i = 0; i < emEvent.numTouches; i++) {
-            x += emEvent.touches[i].clientX;
-            y += emEvent.touches[i].clientY;
+            x += emEvent.touches[i].targetX;
+            y += emEvent.touches[i].targetY;
         }
         dst_x = x / emEvent.numTouches;
         dst_y = y / emEvent.numTouches;
@@ -386,10 +386,10 @@ public:
         if (emEvent.numTouches < 2) {
             return;
         }
-        double x1 = emEvent.touches[0].clientX;
-        double y1 = emEvent.touches[0].clientY;
-        double x2 = emEvent.touches[1].clientX;
-        double y2 = emEvent.touches[1].clientY;
+        double x1 = emEvent.touches[0].targetX;
+        double y1 = emEvent.touches[0].targetY;
+        double x2 = emEvent.touches[1].targetX;
+        double y2 = emEvent.touches[1].targetY;
         dst_distance = std::sqrt(std::pow(x1 - x2, 2) + std::pow(y1 - y2, 2));
     }
 
@@ -579,6 +579,9 @@ public:
     std::function<void()> editingDoneFunc;
     std::shared_ptr<MenuBarImplHtml> menuBar;
 
+    bool useWorkaround_devicePixelRatio = false;
+
+
     WindowImplHtml(val htmlContainer, std::string emCanvasSel) :
         emCanvasSel(emCanvasSel),
         htmlContainer(htmlContainer),
@@ -615,6 +618,12 @@ public:
             this->scrollbarHelper.set("onScrollCallback", Wrap(&onScrollCallback));
         }
 
+        //FIXME(emscripten): In Chrome for Android on tablet device, devicePixelRatio should not be multiplied.
+        std::string userAgent = val::global("navigator")["userAgent"].as<std::string>();
+        bool is_smartphone = userAgent.find("Mobile") != std::string::npos;
+        bool is_android_device = userAgent.find("Android") != std::string::npos;
+        this->useWorkaround_devicePixelRatio = is_android_device && !is_smartphone;
+
         sscheck(emscripten_set_resize_callback(
             EMSCRIPTEN_EVENT_TARGET_WINDOW, this, /*useCapture=*/false,
                     WindowImplHtml::ResizeCallback));
@@ -640,21 +649,18 @@ public:
                     emCanvasSel.c_str(), this, /*useCapture=*/false,
                     WindowImplHtml::MouseCallback));
 
-        {
-            std::string altCanvasSelector = "#canvas0";
-            sscheck(emscripten_set_touchstart_callback(
-                        altCanvasSelector.c_str(), this, /*useCapture=*/false,
-                        WindowImplHtml::TouchCallback));
-            sscheck(emscripten_set_touchmove_callback(
-                        altCanvasSelector.c_str(), this, /*useCapture=*/false,
-                        WindowImplHtml::TouchCallback));
-            sscheck(emscripten_set_touchend_callback(
-                        altCanvasSelector.c_str(), this, /*useCapture=*/false,
-                        WindowImplHtml::TouchCallback));
-            sscheck(emscripten_set_touchcancel_callback(
-                        altCanvasSelector.c_str(), this, /*useCapture=*/false,
-                        WindowImplHtml::TouchCallback));
-        }
+        sscheck(emscripten_set_touchstart_callback(
+                    emCanvasSel.c_str(), this, /*useCapture=*/false,
+                    WindowImplHtml::TouchCallback));
+        sscheck(emscripten_set_touchmove_callback(
+                    emCanvasSel.c_str(), this, /*useCapture=*/false,
+                    WindowImplHtml::TouchCallback));
+        sscheck(emscripten_set_touchend_callback(
+                    emCanvasSel.c_str(), this, /*useCapture=*/false,
+                    WindowImplHtml::TouchCallback));
+        sscheck(emscripten_set_touchcancel_callback(
+                    emCanvasSel.c_str(), this, /*useCapture=*/false,
+                    WindowImplHtml::TouchCallback));
 
         sscheck(emscripten_set_wheel_callback(
                     emCanvasSel.c_str(), this, /*useCapture=*/false,
@@ -932,9 +938,14 @@ public:
         sscheck(emscripten_get_element_css_size(htmlContainerSel.c_str(), &width, &height));
         // sscheck(emscripten_get_element_css_size(emCanvasSel.c_str(), &width, &height));
 
-        double devicePixelRatio = GetDevicePixelRatio();
-        width *= devicePixelRatio;
-        height *= devicePixelRatio;
+        if (this->useWorkaround_devicePixelRatio) {
+            // Workaround is to skip applying devicePixelRatio.
+            // So NOP here.
+        } else {
+            double devicePixelRatio = emscripten_get_device_pixel_ratio();
+            width *= devicePixelRatio;
+            height *= devicePixelRatio;
+        }
 
         int currentWidth = 0, currentHeight = 0;
         sscheck(emscripten_get_canvas_element_size(emCanvasSel.c_str(), &currentWidth, &currentHeight));
@@ -1245,15 +1256,15 @@ public:
 
     Response RunModal() {
         // ssassert(false, "RunModal not supported on Emscripten");
-        dbp("MessageDialog::RunModal() called.");
+        // dbp("MessageDialog::RunModal() called.");
         this->ShowModal();
         //FIXME(emscripten): use val::await() with JavaScript's Promise
         while (true) {
             if (this->is_shown) {
-                dbp("MessageDialog::RunModal(): is_shown == true");
+                // dbp("MessageDialog::RunModal(): is_shown == true");
                 emscripten_sleep(2000);
             } else {
-                dbp("MessageDialog::RunModal(): break due to is_shown == false");
+                // dbp("MessageDialog::RunModal(): break due to is_shown == false");
                 break;
             }
         }
@@ -1262,7 +1273,7 @@ public:
             return this->latestResponse;
         } else {
             // FIXME(emscripten):
-            dbp("MessageDialog::RunModal(): Cannot get Response.");
+            // dbp("MessageDialog::RunModal(): Cannot get Response.");
             return this->latestResponse;
         }
     }
@@ -1364,7 +1375,7 @@ public:
     bool RunModal() override {
         //FIXME(emscripten):
         dbp("FileOpenDialogImplHtml::RunModal()");
-        this->filename = "untitled.slvs";
+        this->filename = "/untitled.slvs";
         this->fileUploadHelper.call<void>("showDialog");
 
         //FIXME(emscripten): use val::await() with JavaScript's Promise
@@ -1373,7 +1384,7 @@ public:
         while (true) {
             bool is_shown = this->fileUploadHelper["is_shown"].as<bool>();
             if (!is_shown) {
-                dbp("FileOpenDialogImplHtml: break due to is_shown == false");
+                // dbp("FileOpenDialogImplHtml: break due to is_shown == false");
                 break;
             } else {
                 // dbp("FileOpenDialogImplHtml: sleep 100msec... (%d)", is_shown);
@@ -1384,7 +1395,7 @@ public:
         val selectedFilenameVal = this->fileUploadHelper["currentFilename"];
 
         if (selectedFilenameVal == val::null()) {
-            dbp("selectedFilenameVal is null");
+            // dbp("selectedFilenameVal is null");
             return false;
         } else {
             std::string selectedFilename = selectedFilenameVal.as<std::string>();
@@ -1431,9 +1442,11 @@ public:
 
     void AddFilter(std::string name, std::vector<std::string> extensions) override {
         this->filters = "";
-        for (auto extension : extensions) {
-            this->filters = "." + extension;
-            this->filters += ",";
+        for (size_t i = 0; i < extensions.size(); i++) {
+            if (i != 0) {
+                this->filters += ",";
+            }
+            this->filters = "." + extensions[i];
         }
         dbp("filter=%s", this->filters.c_str());
     }
@@ -1456,13 +1469,13 @@ public:
 
 FileDialogRef CreateOpenFileDialog(WindowRef parentWindow) {
     // FIXME(emscripten): implement
-    dbp("CreateOpenFileDialog()");
+    // dbp("CreateOpenFileDialog()");
     return std::shared_ptr<FileOpenDialogImplHtml>(new FileOpenDialogImplHtml());
 }
 
 FileDialogRef CreateSaveFileDialog(WindowRef parentWindow) {
     // FIXME(emscripten): implement
-    dbp("CreateSaveFileDialog()");
+    // dbp("CreateSaveFileDialog()");
     return std::shared_ptr<FileSaveDummyDialogImplHtml>(new FileSaveDummyDialogImplHtml());
 }
 
@@ -1490,7 +1503,7 @@ std::vector<std::string> InitGui(int argc, char **argv) {
     val::global("window").call<void>("addEventListener", val("beforeunload"),
                                      Wrap(&onBeforeUnload));
 
-    dbp("Set onSaveFinished");
+    // dbp("Set onSaveFinished");
     SS.OnSaveFinished = OnSaveFinishedCallback;
 
     // FIXME(emscripten): get locale from user preferences
