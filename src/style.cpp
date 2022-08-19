@@ -233,7 +233,7 @@ double Style::Width(int s) {
 RgbaColor Style::RewriteColor(RgbaColor rgbin) {
     Vector rgb = Vector::From(rgbin.redF(), rgbin.greenF(), rgbin.blueF());
     rgb = rgb.Minus(Vector::From(1, 1, 1));
-    if(rgb.Magnitude() < 0.4 && SS.fixExportColors) {
+    if(SS.fixExportColors || (rgb.Magnitude() < 0.4 && SS.fixExportColors)) {
         // This is an almost-white color in a default style, which is
         // good for the default on-screen view (black bg) but probably
         // not desired in the exported files, which typically are shown
