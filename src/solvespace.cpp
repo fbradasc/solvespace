@@ -429,13 +429,13 @@ static std::pair<int, std::string> SelectSIPrefixInch(int deg) {
 std::string SolveSpaceUI::MmToStringSI(double v, int dim) {
     bool compact = false;
     if(dim == 0) {
-        if(!useSIPrefixes) return MmToString(v);
+        if(!useSIPrefixes) return MmToString(v / SS.exportScale);
         compact = true;
         dim = 1;
     }
 
     bool inches = (viewUnits == Unit::INCHES) || (viewUnits == Unit::FEET_INCHES);
-    v /= pow(inches ? 25.4 : 1000, dim);
+    v /= pow((inches ? 25.4 : 1000) * SS.exportScale, dim);
     int vdeg = (int)(log10(fabs(v)));
     std::string unit;
     if(fabs(v) > 0.0) {
