@@ -26,7 +26,7 @@ msgid ""
 msgstr ""
 "Couper, coller et copier fonctionnent uniquement dans un plan de travail.\n"
 "\n"
-"Activez un plan avec \"Dessin -> Dans le plan de travail\"."
+"Activez un plan avec « Dessin -> Dans le plan de travail »."
 
 #: clipboard.cpp:331
 msgid "Clipboard is empty; nothing to paste."
@@ -82,7 +82,7 @@ msgid ""
 "Perspective Projection."
 msgstr ""
 "Le facteur de perspective n'aura aucun effet tant que vous n'aurez pas "
-"activé \"Affichage -> Utiliser la Vue en perspective\"."
+"activé « Affichage -> Utiliser la Vue en perspective »."
 
 #: confscreen.cpp:464 confscreen.cpp:474
 #, c-format
@@ -324,7 +324,7 @@ msgid ""
 "tangent to the line."
 msgstr ""
 "L'arc tangent et le segment de ligne doivent partager une extrémité. "
-"Contraignez-les avec \"Contraintes -> Sur Point\" avant de contraindre la "
+"Contraignez-les avec « Contraintes -> Sur Point » avant de contraindre la "
 "tangente."
 
 #: constraint.cpp:186
@@ -336,7 +336,7 @@ msgid ""
 "line."
 msgstr ""
 "La tangente cubique et le segment de ligne doivent partager une extrémité. "
-"Contraignez-les avec \"Contraintes -> Sur Point\" avant de contraindre la "
+"Contraignez-les avec « Contraintes -> Sur Point » avant de contraindre la "
 "tangente."
 
 #: constraint.cpp:193
@@ -376,7 +376,7 @@ msgid ""
 "curves to be tangent."
 msgstr ""
 "Les courbes doivent partager une extrémité. Contraignez-les avec "
-"\"Contraintes -> Sur Point\" avant de contraindre la tangente."
+"« Contraintes -> Sur Point » avant de contraindre la tangente."
 
 #: constraint.cpp:303
 msgid ""
@@ -654,7 +654,7 @@ msgid ""
 "2d View to export bare lines and curves."
 msgstr ""
 "Aucun modèle solide présent ; dessinez-en un avec une extrusion et révolution, ou "
-"utilisez \"Exporter vue 2d\" pour exporter les lignes et les courbes dépouillées."
+"utilisez « Exporter vue 2d » pour exporter les lignes et les courbes dépouillées."
 
 #: export.cpp:61
 msgid ""
@@ -734,7 +734,7 @@ msgstr "Fichier manquant"
 #, c-format
 msgctxt "dialog"
 msgid "The linked file “%s” is not present."
-msgstr "Le fichier lié \"%s\" n'est pas présent."
+msgstr "Le fichier lié « %s » n'est pas présent."
 
 #: file.cpp:879
 msgctxt "dialog"
@@ -1227,7 +1227,7 @@ msgstr "(pas de fichier récent)"
 #: graphicswin.cpp:370
 #, c-format
 msgid "File '%s' does not exist."
-msgstr "Le fichier \"%s\" n'existe pas."
+msgstr "Le fichier « %s » n'existe pas."
 
 #: graphicswin.cpp:779
 msgid "No workplane is active, so the grid will not appear."
@@ -1607,7 +1607,7 @@ msgstr ""
 
 #: mouse.cpp:714
 msgid "Toggle Construction"
-msgstr "Basculer en mode « construction »"
+msgstr "Basculer en mode « construction »."
 
 #: mouse.cpp:730
 msgid "Delete Point-Coincident Constraint"
@@ -1659,7 +1659,7 @@ msgid ""
 "Workplane."
 msgstr ""
 "Impossible de dessiner un rectangle en 3d ; D'abord, activez un plan de "
-"travail avec \"Dessin -> Dans le plan de travail\"."
+"travail avec « Dessin -> Dans le plan de travail »."
 
 #: mouse.cpp:1027
 msgid "click to place other corner of rectangle"
@@ -1675,7 +1675,7 @@ msgid ""
 "Workplane."
 msgstr ""
 "Ne peut pas dessiner l'arc en 3d ; D'abord, activez un plan de travail avec "
-"\"Dessin -> Dans le plan de travail\"."
+"« Dessin -> Dans le plan de travail »."
 
 #: mouse.cpp:1072
 msgid "click to place point"
@@ -1689,7 +1689,7 @@ msgstr "cliquez le prochain point cubique ou appuyez sur Esc"
 msgid ""
 "Sketching in a workplane already; sketch in 3d before creating new workplane."
 msgstr ""
-"Vous dessinez déjà dans un plan de travail ; Sélectionner \"Dessiner en 3d\" "
+"Vous dessinez déjà dans un plan de travail ; Sélectionner « Dessiner en 3d » "
 "avant de créer un nouveau plan de travail."
 
 #: mouse.cpp:1109
@@ -1698,7 +1698,7 @@ msgid ""
 "Workplane."
 msgstr ""
 "Impossible de dessiner du texte en 3d ; D'abord, activer un plan de travail "
-"avec \"Dessin -> Dans le plan de travail\"."
+"avec « Dessin -> Dans le plan de travail »."
 
 #: mouse.cpp:1126
 msgid "click to place bottom right of text"
@@ -1710,7 +1710,7 @@ msgid ""
 "Workplane."
 msgstr ""
 "Impossible de dessiner l'image en 3d ; D'abord, activez un plan de travail "
-"avec \"Dessin -> Dans le plan de travail\"."
+"avec « Dessin -> Dans le plan de travail »."
 
 #: platform/gui.cpp:85 platform/gui.cpp:90 solvespace.cpp:583
 msgctxt "file-type"
@@ -1872,7 +1872,7 @@ msgstr "Fichier modifié"
 #, c-format
 msgctxt "dialog"
 msgid "Do you want to save the changes you made to the sketch “%s”?"
-msgstr "Voulez-vous sauver les changements que vous avez fait au dessin \"%s\" ?"
+msgstr "Voulez-vous sauver les changements que vous avez fait au dessin « %s » ?"
 
 #: solvespace.cpp:645
 msgctxt "dialog"
@@ -2045,7 +2045,7 @@ msgstr "Mauvaise sélection pour le tracé ; sélectionnez un unique point."
 #: solvespace.cpp:1049
 #, c-format
 msgid "Couldn't write to '%s'"
-msgstr "Impossible d'écrire \"%s\""
+msgstr "Impossible d'écrire « %s »"
 
 #: solvespace.cpp:1079
 msgid "The mesh is self-intersecting (NOT okay, invalid)."
@@ -2415,7 +2415,7 @@ msgstr "Mauvais format : Spécifiez x, y, z"
 #~ "removed."
 #~ msgstr ""
 #~ "Voulez-vous le localiser manuellement ?\n"
-#~ "Si vous sélectionnez \"Non\", toute géométrie qui dépend du fichier "
+#~ "Si vous sélectionnez « Non », toute géométrie qui dépend du fichier "
 #~ "manquant sera supprimée."
 
 #~ msgctxt "button"
