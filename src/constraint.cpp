@@ -327,8 +327,9 @@ void Constraint::MenuConstrain(Command id) {
 
             c.valA = 0;
             c.ModifyToSatisfy();
-            AddConstraint(&c);
             newcons.push_back(c);
+            for (auto&& nc:newcons)
+                AddConstraint(&nc);
             break;
         }
 
@@ -372,8 +373,8 @@ void Constraint::MenuConstrain(Command id) {
                         "    * a point and one to three plane faces (point on face(s))\n"));
                 return;
             }
-            for (auto&& nc : newcons)
-              AddConstraint(&nc);
+            newcons.push_back(c);
+            AddConstraint(&c);
             break;
 
         case Command::EQUAL:
@@ -406,7 +407,21 @@ void Constraint::MenuConstrain(Command id) {
                 c.entityB = gs.entity[1];
                 c.ptA = gs.point[0];
                 newcons.push_back(c);
-            } else  if(gs.circlesOrArcs >= 2 && gs.circlesOrArcs == gs.n) {
+            } else if(gs.vectors == 4 && gs.n == 4) {
+                c.type = Type::EQUAL_ANGLE;
+                c.entityA = gs.vector[0];
+                c.entityB = gs.vector[1];
+                c.entityC = gs.vector[2];
+                c.entityD = gs.vector[3];
+                newcons.push_back(c);
+            } else if(gs.vectors == 3 && gs.n == 3) {
+                c.type = Type::EQUAL_ANGLE;
+                c.entityA = gs.vector[0];
+                c.entityB = gs.vector[1];
+                c.entityC = gs.vector[1];
+                c.entityD = gs.vector[2];
+                newcons.push_back(c);
+            } else if(gs.circlesOrArcs >= 2 && gs.circlesOrArcs == gs.n) {
                 c.type = Type::EQUAL_RADIUS;
                 c.entityA = gs.entity[0];
                 for (std::vector<hEntity>::size_type k = 1;k < gs.entity.size(); ++k){
@@ -438,7 +453,6 @@ void Constraint::MenuConstrain(Command id) {
                                 "(line segment length equals arc length)\n"));
                 return;
             }
-            SS.UndoRemember();
             for (auto&& nc : newcons){
                 if(nc.type == Type::EQUAL_ANGLE) {
                     // Infer the nearest supplementary angle from the sketch.
@@ -452,7 +466,7 @@ void Constraint::MenuConstrain(Command id) {
                         nc.other = true;
                     }
                 }
-                AddConstraint(&nc, /*rememberForUndo=*/false);
+                AddConstraint(&nc);
             }
             break;
 
@@ -487,6 +501,7 @@ void Constraint::MenuConstrain(Command id) {
 
             c.valA = 0;
             c.ModifyToSatisfy();
+            newcons.push_back(c);
             AddConstraint(&c);
             newcons.push_back(c);
             break;
@@ -522,6 +537,7 @@ void Constraint::MenuConstrain(Command id) {
 
             c.valA = 0;
             c.ModifyToSatisfy();
+            newcons.push_back(c);
             AddConstraint(&c);
             newcons.push_back(c);
             break;
@@ -536,6 +552,7 @@ void Constraint::MenuConstrain(Command id) {
                 // it on-line; so auto-remove that.  Handle as one undo group.
                 SS.UndoRemember();
                 DeleteAllConstraintsFor(Type::PT_ON_LINE, c.entityA, c.ptA);
+                newcons.push_back(c);
                 AddConstraint(&c, /*rememberForUndo=*/false);
                 newcons.push_back(c);
                 break;
@@ -544,8 +561,8 @@ void Constraint::MenuConstrain(Command id) {
                 int i = SK.GetEntity(gs.entity[0])->IsWorkplane() ? 1 : 0;
                 c.entityA = gs.entity[i];
                 c.entityB = gs.entity[1-i];
-                AddConstraint(&c);
                 newcons.push_back(c);
+                AddConstraint(&c);
             } else {
                 Error(_("Bad selection for at midpoint constraint. This "
                         "constraint can apply to:\n\n"
@@ -643,22 +660,20 @@ void Constraint::MenuConstrain(Command id) {
                         Entity::NO_ENTITY);
                     DeleteAllConstraintsFor(Type::VERTICAL, (gs.entity[0]),
                         Entity::NO_ENTITY);
+                    newcons.push_back(c);
                     AddConstraint(&c, /*rememberForUndo=*/false);
                     newcons.push_back(c);
                     break;
                 }
             }
+            newcons.push_back(c);
             AddConstraint(&c);
             newcons.push_back(c);
             break;
 
         case Command::VERTICAL:
         case Command::HORIZONTAL: {
-            if(id == Command::HORIZONTAL) {
-                c.type = Type::HORIZONTAL;
-            } else {
-                c.type = Type::VERTICAL;
-            }
+            hEntity ha, hb;
             if(c.workplane == Entity::FREE_IN_3D) {
                 Error(_("Activate a workplane (with Sketch -> In Workplane) before "
                         "applying a horizontal or vertical constraint."));
@@ -667,24 +682,28 @@ void Constraint::MenuConstrain(Command id) {
             if(gs.lineSegments > 0 && gs.lineSegments == gs.n) {
                 for (auto enti : gs.entity){
                     c.entityA = enti;
+                    if(id == Command::HORIZONTAL) {
+                        c.type = Type::HORIZONTAL;
+                    } else {
+                        c.type = Type::VERTICAL;
+                    }
                     newcons.push_back(c);
                 }
-            } else if(gs.points >= 2 && gs.n == gs.points) {
-                c.ptA = gs.point[0];
-                for (int k = 1; k<gs.points; k++) {
-                  c.ptB = gs.point[k];
-                  newcons.push_back(c);
-                }
+                Entity *e = SK.GetEntity(c.entityA);
+                ha = e->point[0];
+                hb = e->point[1];
+            } else if(gs.points == 2 && gs.n == 2) {
+                ha = c.ptA = gs.point[0];
+                hb = c.ptB = gs.point[1];
             } else {
                 Error(_("Bad selection for horizontal / vertical constraint. "
                         "This constraint can apply to:\n\n"
-                        "    * two or more points\n"
-                        "    * one or more line segments\n"));
+                        "    * two points\n"
+                        "    * a line segment\n"));
                 return;
             }
-            SS.UndoRemember();
             for (auto && nc: newcons)
-                AddConstraint(&nc, /*rememberForUndo=*/false);
+                AddConstraint(&nc);
             break;
         }
 
@@ -724,6 +743,7 @@ void Constraint::MenuConstrain(Command id) {
 
                 nfree->NormalForceTo(Quaternion::From(fu, fv));
             }
+            newcons.push_back(c);
             AddConstraint(&c, /*rememberForUndo=*/false);
             newcons.push_back(c);
             break;
@@ -819,6 +839,7 @@ void Constraint::MenuConstrain(Command id) {
             }
 
             c.ModifyToSatisfy();
+            newcons.push_back(c);
             AddConstraint(&c);
             newcons.push_back(c);
             break;
@@ -829,7 +850,6 @@ void Constraint::MenuConstrain(Command id) {
                 c.type = Type::PARALLEL;
                 c.entityA = gs.face[0];
                 c.entityB = gs.face[1];            
-                newcons.push_back(c);
             } else if(gs.vectors > 1 && gs.vectors == gs.n) {
                 c.type = Type::PARALLEL;
                 c.entityA = gs.vector[0];
@@ -837,8 +857,7 @@ void Constraint::MenuConstrain(Command id) {
                     c.entityB = gs.vector[k];
                     newcons.push_back(c);
                 }
-            } else if(gs.lineSegments == 1 && gs.arcs == 1 &&
-                      (gs.n == 2 || (gs.points == 1 && gs.n == 3))) {
+            } else if(gs.lineSegments == 1 && gs.arcs == 1 && gs.n == 2) {
                 Entity *line = SK.GetEntity(gs.entity[0]),
                        *arc  = SK.GetEntity(gs.entity[1]);
                 if(line->type == Entity::Type::ARC_OF_CIRCLE) {
@@ -852,8 +871,7 @@ void Constraint::MenuConstrain(Command id) {
                 c.entityA = arc->h;
                 c.entityB = line->h;
                 newcons.push_back(c);
-            } else if(gs.lineSegments == 1 && gs.cubics == 1 &&
-                      (gs.n == 2 || (gs.points == 1 && gs.n == 3))) {
+            } else if(gs.lineSegments == 1 && gs.cubics == 1 && gs.n == 2) {
                 Entity *line  = SK.GetEntity(gs.entity[0]),
                        *cubic = SK.GetEntity(gs.entity[1]);
                 if(line->type == Entity::Type::CUBIC) {
@@ -867,7 +885,7 @@ void Constraint::MenuConstrain(Command id) {
                 c.entityA = cubic->h;
                 c.entityB = line->h;
                 newcons.push_back(c);
-            } else if(gs.cubics + gs.arcs == 2 && (gs.n == 2 || (gs.points == 2 && gs.n == 4))) {
+            } else if(gs.cubics + gs.arcs == 2 && gs.n == 2) {
                 if(!SS.GW.LockedInWorkplane()) {
                     Error(_("Curve-curve tangency must apply in workplane."));
                     return;
@@ -896,9 +914,8 @@ void Constraint::MenuConstrain(Command id) {
                               "an endpoint and the end point(s) of the curve(s) (tangent)\n"));
                         return;
             }
-            SS.UndoRemember();
             for (auto&& nc:newcons)
-                AddConstraint(&nc, /*rememberForUndo=*/false);
+                AddConstraint(&nc);
             break;
 
         case Command::PERPENDICULAR:
@@ -919,6 +936,7 @@ void Constraint::MenuConstrain(Command id) {
                         "    * two normals\n"));
                 return;
             }
+            newcons.push_back(c);
             AddConstraint(&c);
             newcons.push_back(c);
             break;
@@ -933,6 +951,7 @@ void Constraint::MenuConstrain(Command id) {
                         "    * a point\n"));
                 return;
             }
+            newcons.push_back(c);
             AddConstraint(&c);
             newcons.push_back(c);
             break;
@@ -944,6 +963,7 @@ void Constraint::MenuConstrain(Command id) {
                 c.group       = SS.GW.activeGroup;
                 c.workplane   = SS.GW.ActiveWorkplane();
                 c.comment     = _("NEW COMMENT -- DOUBLE-CLICK TO EDIT");
+                newcons.push_back(c);
                 AddConstraint(&c);
                 newcons.push_back(c);
             } else {
