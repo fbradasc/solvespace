@@ -336,10 +336,8 @@ void Constraint::MenuConstrain(Command id) {
             if(gs.points >= 2 && gs.points == gs.n) {
                 c.type = Type::POINTS_COINCIDENT;
                 c.ptA = gs.point[0];
-                for(int k = 1; k < gs.points; k++) {
-                    c.ptB = gs.point[k];
-                    newcons.push_back(c);
-                }
+                c.ptB = gs.point[1];
+                newcons.push_back(c);
             } else if(gs.points == 1 && gs.workplanes == 1 && gs.n == 2) {
                 c.type = Type::PT_IN_PLANE;
                 c.ptA = gs.point[0];
@@ -372,8 +370,8 @@ void Constraint::MenuConstrain(Command id) {
                         "    * a point and one to three plane faces (point on face(s))\n"));
                 return;
             }
-            AddConstraint(&c);
-            newcons.push_back(c);
+            for (auto&& nc : newcons)
+              AddConstraint(&nc);
             break;
 
         case Command::EQUAL:
