@@ -78,7 +78,7 @@ static val Wrap(std::function<void()> *func) {
 //-----------------------------------------------------------------------------
 
 void FatalError(const std::string &message) {
-    fprintf(stderr, "%s", message.c_str());
+    dbp("%s", message.c_str());
 #ifndef NDEBUG
     emscripten_debugger();
 #endif
@@ -344,6 +344,227 @@ MenuBarRef GetOrCreateMainMenu(bool *unique) {
 // Windows
 //-----------------------------------------------------------------------------
 
+class TouchEventHelper {
+public:
+    // FIXME(emscripten): Workaround. touchstart and touchend repeats two times.
+    bool touchActionStarted = false;
+
+    int previousNumTouches = 0;
+
+    double centerX = 0;
+    double centerY = 0;
+
+    // double startPinchDistance = 0;
+    double previousPinchDistance = 0;
+
+    std::function<void(MouseEvent*, void*)> onPointerDown;
+    std::function<void(MouseEvent*, void*)> onPointerMove;
+    std::function<void(MouseEvent*, void*)> onPointerUp;
+    std::function<void(MouseEvent*, void*)> onScroll;
+
+    void clear(void) {
+        touchActionStarted = false;
+        previousNumTouches = 0;
+        centerX = 0;
+        centerY = 0;
+        // startPinchDistance = 0;
+        previousPinchDistance = 0;
+    }
+
+    void calculateCenterPosition(const EmscriptenTouchEvent& emEvent, double& dst_x, double& dst_y) {
+        double x = 0;
+        double y = 0;
+        for (int i = 0; i < emEvent.numTouches; i++) {
+            x += emEvent.touches[i].targetX;
+            y += emEvent.touches[i].targetY;
+        }
+        dst_x = x / emEvent.numTouches;
+        dst_y = y / emEvent.numTouches;
+    }
+
+    void calculatePinchDistance(const EmscriptenTouchEvent& emEvent, double& dst_distance) {
+        if (emEvent.numTouches < 2) {
+            return;
+        }
+        double x1 = emEvent.touches[0].targetX;
+        double y1 = emEvent.touches[0].targetY;
+        double x2 = emEvent.touches[1].targetX;
+        double y2 = emEvent.touches[1].targetY;
+        dst_distance = std::sqrt(std::pow(x1 - x2, 2) + std::pow(y1 - y2, 2));
+    }
+
+    void createMouseEventPRESS(const EmscriptenTouchEvent& emEvent, MouseEvent& dst_mouseevent) {
+        double x = 0, y = 0;
+        this->calculateCenterPosition(emEvent, x, y);
+        this->centerX = x;
+        this->centerY = y;
+        this->touchActionStarted = true;
+        this->previousNumTouches = emEvent.numTouches;
+        dst_mouseevent.type = MouseEvent::Type::PRESS;
+        dst_mouseevent.x = x;
+        dst_mouseevent.y = y;
+        dst_mouseevent.shiftDown = emEvent.shiftKey;
+        dst_mouseevent.controlDown = emEvent.ctrlKey;
+        switch(emEvent.numTouches) {
+        case 1:
+            dst_mouseevent.button = MouseEvent::Button::LEFT;
+            break;
+        case 2: {
+            dst_mouseevent.button = MouseEvent::Button::RIGHT;
+            // double distance = 0;
+            this->calculatePinchDistance(emEvent, this->previousPinchDistance);
+            // this->startPinchDistance = distance;
+            // this->previousPinchDistance = distance;
+            break;
+        }
+        default:
+            dst_mouseevent.button = MouseEvent::Button::MIDDLE;
+            break;
+        }
+    }
+
+    void createMouseEventRELEASE(const EmscriptenTouchEvent& emEvent, MouseEvent& dst_mouseevent) {
+        this->calculateCenterPosition(emEvent, this->centerX, this->centerY);
+        this->previousNumTouches = 0;
+        dst_mouseevent.type = MouseEvent::Type::RELEASE;
+        dst_mouseevent.x = this->centerX;
+        dst_mouseevent.y = this->centerY;
+        dst_mouseevent.shiftDown = emEvent.shiftKey;
+        dst_mouseevent.controlDown = emEvent.ctrlKey;
+        switch(this->previousNumTouches) {
+        case 1:
+            dst_mouseevent.button = MouseEvent::Button::LEFT;
+            break;
+        case 2:
+            dst_mouseevent.button = MouseEvent::Button::RIGHT;
+            break;
+        default:
+            dst_mouseevent.button = MouseEvent::Button::MIDDLE;
+            break;
+        }
+    }
+
+    void createMouseEventMOTION(const EmscriptenTouchEvent& emEvent, MouseEvent& dst_mouseevent) {
+        dst_mouseevent.type = MouseEvent::Type::MOTION;
+        this->calculateCenterPosition(emEvent, this->centerX, this->centerY);
+        dst_mouseevent.x = this->centerX;
+        dst_mouseevent.y = this->centerY;
+        dst_mouseevent.shiftDown = emEvent.shiftKey;
+        dst_mouseevent.controlDown = emEvent.ctrlKey;
+        switch(emEvent.numTouches) {
+        case 1:
+            dst_mouseevent.button = MouseEvent::Button::LEFT;
+            break;
+        case 2:
+            dst_mouseevent.button = MouseEvent::Button::RIGHT;
+            break;
+        default:
+            dst_mouseevent.button = MouseEvent::Button::MIDDLE;
+            break;
+        }
+    }
+
+    void createMouseEventSCROLL(const EmscriptenTouchEvent& emEvent, MouseEvent& event) {
+        event.type = MouseEvent::Type::SCROLL_VERT;
+        double newDistance = 0;
+        this->calculatePinchDistance(emEvent, newDistance);
+        this->calculateCenterPosition(emEvent, this->centerX, this->centerY);
+        event.x = this->centerX;
+        event.y = this->centerY;
+        event.shiftDown = emEvent.shiftKey;
+        event.controlDown = emEvent.ctrlKey;
+        // FIXME(emscripten): best value range for scrollDelta ?
+        event.scrollDelta = (newDistance - this->previousPinchDistance) / 25.0;
+        if (std::abs(event.scrollDelta) > 2) {
+            event.scrollDelta = 2;
+            if (std::signbit(event.scrollDelta)) {
+                event.scrollDelta *= -1.0;
+            }
+        }
+        this->previousPinchDistance = newDistance;
+    }
+
+    void onTouchStart(const EmscriptenTouchEvent& emEvent, void* callbackParameter) {
+        if (this->touchActionStarted) {
+            // dbp("onTouchStart(): Break due to already started.");
+            return;
+        }
+
+        MouseEvent event;
+        this->createMouseEventPRESS(emEvent, event);
+        this->previousNumTouches = emEvent.numTouches;
+        if (this->onPointerDown) {
+            // dbp("onPointerDown(): numTouches=%d, timestamp=%f", emEvent.numTouches, emEvent.timestamp);
+            this->onPointerDown(&event, callbackParameter);
+        }
+    }
+
+    void onTouchMove(const EmscriptenTouchEvent& emEvent, void* callbackParameter) {
+        this->calculateCenterPosition(emEvent, this->centerX, this->centerY);
+        int newNumTouches = emEvent.numTouches;
+        if (newNumTouches != this->previousNumTouches) {
+            MouseEvent releaseEvent;
+
+            this->createMouseEventRELEASE(emEvent, releaseEvent);
+            if (this->onPointerUp) {
+                // dbp("onPointerUp(): numTouches=%d, timestamp=%f", emEvent.numTouches, emEvent.timestamp);
+                this->onPointerUp(&releaseEvent, callbackParameter);
+            }
+
+            MouseEvent pressEvent;
+
+            this->createMouseEventPRESS(emEvent, pressEvent);
+            if (this->onPointerDown) {
+                // dbp("onPointerDown(): numTouches=%d, timestamp=%f", emEvent.numTouches, emEvent.timestamp);
+                this->onPointerDown(&pressEvent, callbackParameter);
+            }
+        }
+
+        MouseEvent motionEvent = { };
+        this->createMouseEventMOTION(emEvent, motionEvent);
+
+        if (this->onPointerMove) {
+            // dbp("onPointerMove(): numTouches=%d, timestamp=%f", emEvent.numTouches, emEvent.timestamp);
+            this->onPointerMove(&motionEvent, callbackParameter);
+        }
+
+        if (emEvent.numTouches == 2) {
+            MouseEvent scrollEvent;
+            this->createMouseEventSCROLL(emEvent, scrollEvent);
+            if (scrollEvent.scrollDelta != 0) {
+                if (this->onScroll) {
+                    // dbp("Scroll %f", scrollEvent.scrollDelta);
+                    this->onScroll(&scrollEvent, callbackParameter);
+                }
+            }
+        }
+
+        this->previousNumTouches = emEvent.numTouches;
+    }
+
+    void onTouchEnd(const EmscriptenTouchEvent& emEvent, void* callbackParameter) {
+        if (!this->touchActionStarted) {
+            return;
+        }
+
+        MouseEvent releaseEvent = { };
+        this->createMouseEventRELEASE(emEvent, releaseEvent);
+        
+        if (this->onPointerUp) {
+            // dbp("onPointerUp(): numTouches=%d, timestamp=%d", emEvent.numTouches, emEvent.timestamp);
+            this->onPointerUp(&releaseEvent, callbackParameter);
+        }
+
+        this->clear();
+    }
+
+    void onTouchCancel(const EmscriptenTouchEvent& emEvent, void* callbackParameter) {
+        this->onTouchEnd(emEvent, callbackParameter);
+    }
+};
+
+static TouchEventHelper touchEventHelper;
+
 static KeyboardEvent handledKeyboardEvent;
 
 class WindowImplHtml final : public Window {
@@ -353,6 +574,7 @@ public:
 
     val htmlContainer;
     val htmlEditor;
+    val scrollbarHelper;
 
     std::function<void()> editingDoneFunc;
     std::shared_ptr<MenuBarImplHtml> menuBar;
@@ -370,7 +592,28 @@ public:
             }
         };
         htmlEditor.call<void>("addEventListener", val("trigger"), Wrap(&editingDoneFunc));
-        htmlContainer.call<void>("appendChild", htmlEditor);
+        htmlContainer["parentElement"].call<void>("appendChild", htmlEditor);
+
+        std::string scrollbarElementQuery = emCanvasSel + "scrollbar";
+        dbp("scrollbar element query: \"%s\"", scrollbarElementQuery.c_str());
+        val scrollbarElement = val::global("document").call<val>("querySelector", val(scrollbarElementQuery));
+        if (scrollbarElement == val::null()) {
+            // dbp("scrollbar element is null.");
+            this->scrollbarHelper = val::null();
+        } else {
+            dbp("scrollbar element OK.");
+            this->scrollbarHelper = val::global("window")["ScrollbarHelper"].new_(val(scrollbarElementQuery));
+            static std::function<void()> onScrollCallback = [this] {
+                // dbp("onScrollCallback std::function this=%p", (void*)this);
+                if (this->onScrollbarAdjusted) {
+                    double newpos = this->scrollbarHelper.call<double>("getScrollbarPosition");
+                    // dbp("  call onScrollbarAdjusted(%f)", newpos);
+                    this->onScrollbarAdjusted(newpos);
+                }
+                this->Invalidate();
+            };
+            this->scrollbarHelper.set("onScrollCallback", Wrap(&onScrollCallback));
+        }
 
         sscheck(emscripten_set_resize_callback(
             EMSCRIPTEN_EVENT_TARGET_WINDOW, this, /*useCapture=*/false,
@@ -396,6 +639,20 @@ public:
         sscheck(emscripten_set_mouseleave_callback(
                     emCanvasSel.c_str(), this, /*useCapture=*/false,
                     WindowImplHtml::MouseCallback));
+
+        sscheck(emscripten_set_touchstart_callback(
+                    emCanvasSel.c_str(), this, /*useCapture=*/false,
+                    WindowImplHtml::TouchCallback));
+        sscheck(emscripten_set_touchmove_callback(
+                    emCanvasSel.c_str(), this, /*useCapture=*/false,
+                    WindowImplHtml::TouchCallback));
+        sscheck(emscripten_set_touchend_callback(
+                    emCanvasSel.c_str(), this, /*useCapture=*/false,
+                    WindowImplHtml::TouchCallback));
+        sscheck(emscripten_set_touchcancel_callback(
+                    emCanvasSel.c_str(), this, /*useCapture=*/false,
+                    WindowImplHtml::TouchCallback));
+
         sscheck(emscripten_set_wheel_callback(
                     emCanvasSel.c_str(), this, /*useCapture=*/false,
                     WindowImplHtml::WheelCallback));
@@ -486,6 +743,63 @@ public:
         return EM_FALSE;
     }
 
+    static EM_BOOL TouchCallback(int emEventType, const EmscriptenTouchEvent *emEvent,
+                                 void *data) {
+
+        if(val::global("window").call<bool>("isModal")) return EM_FALSE;
+
+        static bool initialized = false;
+
+        WindowImplHtml *window = (WindowImplHtml *)data;
+
+        if (!initialized) {
+            touchEventHelper.onPointerDown = [](MouseEvent* event, void* param) -> void {
+                WindowImplHtml* window = (WindowImplHtml*)param;
+                if (window->onMouseEvent) {
+                    window->onMouseEvent(*event);
+                }
+            };
+            touchEventHelper.onPointerMove = [](MouseEvent* event, void* param) -> void {
+                WindowImplHtml* window = (WindowImplHtml*)param;
+                if (window->onMouseEvent) {
+                    window->onMouseEvent(*event);
+                }
+            };
+            touchEventHelper.onPointerUp = [](MouseEvent* event, void* param) -> void {
+                WindowImplHtml* window = (WindowImplHtml*)param;
+                if (window->onMouseEvent) {
+                    window->onMouseEvent(*event);
+                }
+            };
+            touchEventHelper.onScroll = [](MouseEvent* event, void* param) -> void {
+                WindowImplHtml* window = (WindowImplHtml*)param;
+                if (window->onMouseEvent) {
+                    window->onMouseEvent(*event);
+                }
+            };
+            initialized = true;
+        }
+
+        switch(emEventType) {
+            case EMSCRIPTEN_EVENT_TOUCHSTART:
+                touchEventHelper.onTouchStart(*emEvent, window);
+                break;
+            case EMSCRIPTEN_EVENT_TOUCHMOVE:
+                touchEventHelper.onTouchMove(*emEvent, window);
+                break;
+            case EMSCRIPTEN_EVENT_TOUCHEND:
+                touchEventHelper.onTouchEnd(*emEvent, window);
+                break;
+            case EMSCRIPTEN_EVENT_TOUCHCANCEL:
+                touchEventHelper.onTouchCancel(*emEvent, window);
+                break;
+            default:
+                return EM_FALSE;
+        }
+
+        return true;
+    }
+
     static EM_BOOL WheelCallback(int emEventType, const EmscriptenWheelEvent *emEvent,
                                  void *data) {
         if(val::global("window").call<bool>("isModal")) return EM_FALSE;
@@ -494,13 +808,18 @@ public:
         MouseEvent event = {};
         if(emEvent->deltaY != 0) {
             event.type = MouseEvent::Type::SCROLL_VERT;
-            event.scrollDelta = -emEvent->deltaY * 0.1;
+            // FIXME(emscripten):
+            // Pay attention to:
+            //   dbp("Mouse wheel delta mode: %lu", emEvent->deltaMode);
+            //     https://emscripten.org/docs/api_reference/html5.h.html#id11
+            //     https://www.w3.org/TR/DOM-Level-3-Events/#dom-wheelevent-deltamode
+            // and adjust the 0.01 below. deltaMode == 0 on a Firefox on a Windows.
+            event.scrollDelta = -emEvent->deltaY * 0.01;
         } else {
             return EM_FALSE;
         }
 
-        EmscriptenMouseEvent emStatus = {};
-        sscheck(emscripten_get_mouse_status(&emStatus));
+        const EmscriptenMouseEvent &emStatus = emEvent->mouse;
         event.x           = emStatus.targetX;
         event.y           = emStatus.targetY;
         event.shiftDown   = emStatus.shiftKey;
@@ -608,14 +927,19 @@ public:
         double width, height;
         std::string htmlContainerSel = "#" + htmlContainer["id"].as<std::string>();
         sscheck(emscripten_get_element_css_size(htmlContainerSel.c_str(), &width, &height));
-        width  *= emscripten_get_device_pixel_ratio();
-        height *= emscripten_get_device_pixel_ratio();
-        int curWidth, curHeight;
-        sscheck(emscripten_get_canvas_element_size(emCanvasSel.c_str(), &curWidth, &curHeight));
-        if(curWidth != (int)width || curHeight != (int)curHeight) {
-            dbp("Canvas %s: resizing to (%g,%g)", emCanvasSel.c_str(), width, height);
-            sscheck(emscripten_set_canvas_element_size(
-                        emCanvasSel.c_str(), (int)width, (int)height));
+        // sscheck(emscripten_get_element_css_size(emCanvasSel.c_str(), &width, &height));
+
+        double devicePixelRatio = GetDevicePixelRatio();
+        width *= devicePixelRatio;
+        height *= devicePixelRatio;
+
+        int currentWidth = 0, currentHeight = 0;
+        sscheck(emscripten_get_canvas_element_size(emCanvasSel.c_str(), &currentWidth, &currentHeight));
+        
+        if ((int)width != currentWidth || (int)height != currentHeight) {
+            // dbp("Canvas %s container current size: (%d, %d)", emCanvasSel.c_str(), (int)currentWidth, (int)currentHeight);
+            // dbp("Canvas %s: resizing to (%d, %d)", emCanvasSel.c_str(), (int)width, (int)height);
+            sscheck(emscripten_set_canvas_element_size(emCanvasSel.c_str(), (int)width, (int)height));
         }
     }
 
@@ -634,11 +958,11 @@ public:
     }
 
     double GetPixelDensity() override {
-        return 96.0 * emscripten_get_device_pixel_ratio();
+        return 96.0 * GetDevicePixelRatio();
     }
 
-    int GetDevicePixelRatio() override {
-        return (int)emscripten_get_device_pixel_ratio();
+    double GetDevicePixelRatio() override {
+        return emscripten_get_device_pixel_ratio();
     }
 
     bool IsVisible() override {
@@ -682,13 +1006,13 @@ public:
             std::static_pointer_cast<MenuBarImplHtml>(menuBar);
         this->menuBar = menuBarImpl;
 
-        val htmlBody = val::global("document")["body"];
-        val htmlCurrentMenuBar = htmlBody.call<val>("querySelector", val(".menubar"));
+        val htmlMain = val::global("document").call<val>("querySelector", val("main"));
+        val htmlCurrentMenuBar = htmlMain.call<val>("querySelector", val(".menubar"));
         if(htmlCurrentMenuBar.as<bool>()) {
             htmlCurrentMenuBar.call<void>("remove");
         }
-        htmlBody.call<void>("insertBefore", menuBarImpl->htmlMenuBar,
-                                 htmlBody["firstChild"]);
+        htmlMain.call<void>("insertBefore", menuBarImpl->htmlMenuBar,
+                                 htmlMain["firstChild"]);
         ResizeCanvasElement();
     }
 
@@ -731,8 +1055,11 @@ public:
     void ShowEditor(double x, double y, double fontHeight, double minWidth,
                     bool isMonospace, const std::string &text) override {
         htmlEditor["style"].set("display", val(""));
-        htmlEditor["style"].set("left", std::to_string(x - 4) + "px");
-        htmlEditor["style"].set("top",  std::to_string(y - fontHeight - 2) + "px");
+        val canvasClientRect = val::global("document").call<val>("querySelector", val(this->emCanvasSel)).call<val>("getBoundingClientRect");
+        double canvasLeft = canvasClientRect["left"].as<double>();
+        double canvasTop = canvasClientRect["top"].as<double>();
+        htmlEditor["style"].set("left", std::to_string(canvasLeft + x - 4) + "px");
+        htmlEditor["style"].set("top",  std::to_string(canvasTop + y - fontHeight - 2) + "px");
         htmlEditor["style"].set("fontSize", std::to_string(fontHeight) + "px");
         htmlEditor["style"].set("minWidth", std::to_string(minWidth) + "px");
         htmlEditor["style"].set("fontFamily", isMonospace ? "monospace" : "sans");
@@ -745,22 +1072,54 @@ public:
     }
 
     void SetScrollbarVisible(bool visible) override {
-        // FIXME(emscripten): implement
+        // dbp("SetScrollbarVisible(): visible=%d", visible ? 1 : 0);
+        if (this->scrollbarHelper == val::null()) {
+            // dbp("scrollbarHelper is null.");
+            return;
+        }
+        if (!visible) {
+            this->scrollbarHelper.call<void>("setScrollbarEnabled", val(false));
+        }
     }
 
     double scrollbarPos = 0.0;
+    double scrollbarMin = 0.0;
+    double scrollbarMax = 0.0;
+    double scrollbarPageSize = 0.0;
 
     void ConfigureScrollbar(double min, double max, double pageSize) override {
+        // dbp("ConfigureScrollbar(): min=%f, max=%f, pageSize=%f", min, max, pageSize);
+        if (this->scrollbarHelper == val::null()) {
+            // dbp("scrollbarHelper is null.");
+            return;
+        }
         // FIXME(emscripten): implement
+        this->scrollbarMin = min;
+        this->scrollbarMax = max;
+        this->scrollbarPageSize = pageSize;
+
+        this->scrollbarHelper.call<void>("setRange", this->scrollbarMin, this->scrollbarMax);
+        this->scrollbarHelper.call<void>("setPageSize", pageSize);
     }
 
     double GetScrollbarPosition() override {
-        // FIXME(emscripten): implement
+        // dbp("GetScrollbarPosition()");
+        if (this->scrollbarHelper == val::null()) {
+            // dbp("scrollbarHelper is null.");
+            return 0;
+        }
+        this->scrollbarPos = this->scrollbarHelper.call<double>("getScrollbarPosition");
+        // dbp("  GetScrollbarPosition() returns %f", this->scrollbarPos);
         return scrollbarPos;
     }
 
     void SetScrollbarPosition(double pos) override {
-        // FIXME(emscripten): implement
+        // dbp("SetScrollbarPosition(): pos=%f", pos);
+        if (this->scrollbarHelper == val::null()) {
+            // dbp("scrollbarHelper is null.");
+            return;
+        }
+        this->scrollbarHelper.call<void>("setScrollbarPosition", pos);
         scrollbarPos = pos;
     }
 
@@ -808,6 +1167,10 @@ public:
 
     std::vector<std::function<void()>> responseFuncs;
 
+    bool is_shown = false;
+
+    Response latestResponse = Response::NONE;
+
     MessageDialogImplHtml() :
         htmlModal(val::global("document").call<val>("createElement", val("div"))),
         htmlDialog(val::global("document").call<val>("createElement", val("div"))),
@@ -850,26 +1213,52 @@ public:
 
         std::function<void()> responseFunc = [this, response] {
             htmlModal.call<void>("remove");
+            this->latestResponse = response;
             if(onResponse) {
                 onResponse(response);
             }
             auto it = std::remove(dialogsOnScreen.begin(), dialogsOnScreen.end(),
                                   shared_from_this());
             dialogsOnScreen.erase(it);
+            
+            this->is_shown = false;
         };
+        if (responseFuncs.size() == 0) {
+            //FIXME(emscripten): I don't know why but the item in the head of responseFuncs cannot call.
+            // So add dummy item
+            responseFuncs.push_back([]{ });
+        }
         responseFuncs.push_back(responseFunc);
-        htmlButton.call<void>("addEventListener", val("trigger"), Wrap(&responseFuncs.back()));
+        std::function<void()>* callback = &responseFuncs.back();
+        htmlButton.call<void>("addEventListener", val("trigger"), Wrap(callback));
 
         htmlButtons.call<void>("appendChild", htmlButton);
     }
 
     Response RunModal() {
-        ssassert(false, "RunModal not supported on Emscripten");
+        this->ShowModal();
+        //FIXME(emscripten): use val::await() with JavaScript's Promise
+        while (true) {
+            if (this->is_shown) {
+                emscripten_sleep(50);
+            } else {
+                break;
+            }
+        }
+        
+        if (this->latestResponse != Response::NONE) {
+            return this->latestResponse;
+        } else {
+            // FIXME(emscripten):
+            return this->latestResponse;
+        }
     }
 
     void ShowModal() {
         dialogsOnScreen.push_back(shared_from_this());
         val::global("document")["body"].call<void>("appendChild", htmlModal);
+
+        this->is_shown = true;
     }
 };
 
@@ -881,20 +1270,147 @@ MessageDialogRef CreateMessageDialog(WindowRef parentWindow) {
 // File dialogs
 //-----------------------------------------------------------------------------
 
+// In emscripten psuedo filesystem, all userdata will be stored in this directory.
+static std::string basePathInFilesystem = "/data/";
+
+
+/* FileDialog that can open, save and browse. Also refer `src/platform/html/filemanagerui.js`.
+ */
 class FileDialogImplHtml : public FileDialog {
 public:
-    // FIXME(emscripten): implement
+
+    enum class Modes {
+        OPEN = 0,
+        SAVE,
+        BROWSER
+    };
+
+    Modes mode;
+
+    std::string title;
+    std::string filename;
+    std::string filters;
+
+    val jsFileManagerUI;
+
+    FileDialogImplHtml(Modes mode) {
+        dbp("FileDialogImplHtml::FileDialogImplHtml()");
+        val fileManagerUIClass = val::global("window")["FileManagerUI"];
+        val dialogModeValue;
+        this->mode = mode;
+        if (mode == Modes::OPEN) {
+            dialogModeValue = val(0);
+        } else if (mode == Modes::SAVE) {
+            dialogModeValue = val(1);
+        } else {
+            dialogModeValue = val(2);
+        }
+        this->jsFileManagerUI = fileManagerUIClass.new_(dialogModeValue);
+        dbp("FileDialogImplHtml::FileDialogImplHtml() Done.");
+    }
+
+    ~FileDialogImplHtml() override {
+        dbp("FileDialogImplHtml::~FileDialogImplHtml()");
+        this->jsFileManagerUI.call<void>("dispose");
+    }
+
+    void SetTitle(std::string title) override {
+        dbp("FileDialogImplHtml::SetTitle(): title=\"%s\"", title.c_str());
+        this->title = title;
+        this->jsFileManagerUI.call<void>("setTitle", val(title));
+    }
+
+    void SetCurrentName(std::string name) override {
+        dbp("FileDialogImplHtml::SetCurrentName(): name=\"%s\", parent=\"%s\"", name.c_str(), this->GetFilename().Parent().raw.c_str());
+      
+        Path filepath = Path::From(name);
+        if (filepath.IsAbsolute()) {
+            // dbp("FileDialogImplHtml::SetCurrentName(): path is absolute.");
+            SetFilename(filepath);
+        } else {
+            // dbp("FileDialogImplHtml::SetCurrentName(): path is relative.");
+            SetFilename(GetFilename().Parent().Join(name));
+        }
+    }
+
+    Platform::Path GetFilename() override {
+        return Platform::Path::From(this->filename.c_str());
+    }
+
+    void SetFilename(Platform::Path path) override {
+        dbp("FileDialogImplHtml::GetFilename(): path=\"%s\"", path.raw.c_str());
+        this->filename = std::string(path.raw);
+        std::string filename_ = Path::From(this->filename).FileName();
+        this->jsFileManagerUI.call<void>("setDefaultFilename", val(filename_));
+    }
+    
+    void SuggestFilename(Platform::Path path) override {
+        dbp("FileDialogImplHtml::SuggestFilename(): path=\"%s\"", path.raw.c_str());
+        SetFilename(Platform::Path::From(path.FileStem()));
+    }
+
+    void AddFilter(std::string name, std::vector<std::string> extensions) override {
+        if (this->filters.length() > 0) {
+            this->filters += ",";
+        }
+        for (size_t i = 0; i < extensions.size(); i++) {
+            if (i != 0) {
+                this->filters += ",";
+            }
+            this->filters += "." + extensions[i];
+        }
+        dbp("FileDialogImplHtml::AddFilter(): filter=%s", this->filters.c_str());
+        this->jsFileManagerUI.call<void>("setFilter", val(this->filters));
+    }
+
+    void FreezeChoices(SettingsRef settings, const std::string &key) override {
+        
+    }
+
+    void ThawChoices(SettingsRef settings, const std::string &key) override {
+        //FIXME(emscripten): implement
+    }
+
+    bool RunModal() override {
+        dbp("FileDialogImplHtml::RunModal()");
+
+        this->jsFileManagerUI.call<void>("setBasePath", val(basePathInFilesystem));
+        this->jsFileManagerUI.call<void>("show");
+        while (true) {
+            bool isShown = this->jsFileManagerUI.call<bool>("isShown");
+            if (!isShown) {
+                break;
+            } else {
+                emscripten_sleep(50);
+            }
+        }
+
+        dbp("FileSaveDialogImplHtml::RunModal() : dialog closed.");
+
+        std::string selectedFilename = this->jsFileManagerUI.call<std::string>("getSelectedFilename");
+        if (selectedFilename.length() > 0) {
+            // Dummy call to set parent directory
+            this->SetFilename(Path::From(basePathInFilesystem + "/dummy"));
+            this->SetCurrentName(selectedFilename);
+        }
+
+
+        if (selectedFilename.length() > 0) {
+            return true;
+        } else {
+            return false;
+        }
+    }
 };
 
 FileDialogRef CreateOpenFileDialog(WindowRef parentWindow) {
-    // FIXME(emscripten): implement
-    return std::shared_ptr<FileDialogImplHtml>();
-
+    dbp("CreateOpenFileDialog()");
+    return std::shared_ptr<FileDialogImplHtml>(new FileDialogImplHtml(FileDialogImplHtml::Modes::OPEN));
 }
 
 FileDialogRef CreateSaveFileDialog(WindowRef parentWindow) {
-    // FIXME(emscripten): implement
-    return std::shared_ptr<FileDialogImplHtml>();
+    dbp("CreateSaveFileDialog()");
+    return std::shared_ptr<FileDialogImplHtml>(new FileDialogImplHtml(FileDialogImplHtml::Modes::SAVE));
 }
 
 //-----------------------------------------------------------------------------
@@ -909,10 +1425,20 @@ void OpenInBrowser(const std::string &url) {
     val::global("window").call<void>("open", Wrap(url));
 }
 
+
+void OnSaveFinishedCallback(const Platform::Path& filename, bool is_saveAs, bool is_autosave) {
+    dbp("OnSaveFinished(): %s, is_saveAs=%d, is_autosave=%d\n", filename.FileName().c_str(), is_saveAs, is_autosave);
+    std::string filename_str = filename.raw;
+    EM_ASM(saveFileDone(UTF8ToString($0), $1, $2), filename_str.c_str(), is_saveAs, is_autosave);
+}
+
 std::vector<std::string> InitGui(int argc, char **argv) {
     static std::function<void()> onBeforeUnload = std::bind(&SolveSpaceUI::Exit, &SS);
     val::global("window").call<void>("addEventListener", val("beforeunload"),
                                      Wrap(&onBeforeUnload));
+
+    // dbp("Set onSaveFinished");
+    SS.OnSaveFinished = OnSaveFinishedCallback;
 
     // FIXME(emscripten): get locale from user preferences
     SetLocale("en_US");
