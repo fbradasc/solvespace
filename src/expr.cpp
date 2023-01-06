@@ -562,8 +562,8 @@ hParam Expr::ReferencedParams(ParamList *pl) const {
 std::string Expr::Print() const {
     char c;
     switch(op) {
-        case Op::PARAM:     return ssprintf("param(%08x)", parh.v);
-        case Op::PARAM_PTR: return ssprintf("param(p%08x)", parp->h.v);
+        case Op::PARAM:     return ssprintf("param(%08x at %.3f)", parh.v, SK.GetParam(parh)->val);
+        case Op::PARAM_PTR: return ssprintf("param(p%08x at %.3f)", parp->h.v,parp->val);
 
         case Op::CONSTANT:  return ssprintf("%.3f", v);
         case Op::VARIABLE:  return "(var)";
