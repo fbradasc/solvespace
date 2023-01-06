@@ -911,6 +911,10 @@ msgid "E&xtrude"
 msgstr "E&xtrude"
 
 #: graphicswin.cpp:117
+msgid "F&rustum"
+msgstr "F&rustum"
+
+#: graphicswin.cpp:117
 msgid "&Helix"
 msgstr "&Helix"
 
