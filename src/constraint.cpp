@@ -270,11 +270,13 @@ void Constraint::MenuConstrain(Command id) {
         }
 
         case Command::ON_ENTITY:
-            if(gs.points == 2 && gs.n == 2) {
+            if(gs.points >= 2 && gs.points == gs.n) {
                 c.type = Type::POINTS_COINCIDENT;
                 c.ptA = gs.point[0];
-                c.ptB = gs.point[1];
-                newcons.push_back(c);
+                for(int k = 1; k < gs.points; k++) {
+                    c.ptB = gs.point[k];
+                    newcons.push_back(c);
+                }
             } else if(gs.points == 1 && gs.workplanes == 1 && gs.n == 2) {
                 c.type = Type::PT_IN_PLANE;
                 c.ptA = gs.point[0];
@@ -300,11 +302,11 @@ void Constraint::MenuConstrain(Command id) {
             } else {
                 Error(_("Bad selection for on point / curve / plane constraint. "
                         "This constraint can apply to:\n\n"
-                        "    * two points (points coincident)\n"
+                        "    * two or more points (points coincident)\n"
                         "    * a point and a workplane (point in plane)\n"
                         "    * a point and a line segment (point on line)\n"
                         "    * a point and a circle or arc (point on curve)\n"
-                        "    * a point and a plane face (point on face)\n"));
+                        "    * a point and one to three plane faces (point on face(s))\n"));
                 return;
             }
             for (auto&& nc : newcons)
@@ -341,21 +343,7 @@ void Constraint::MenuConstrain(Command id) {
                 c.entityB = gs.entity[1];
                 c.ptA = gs.point[0];
                 newcons.push_back(c);
-            } else if(gs.vectors == 4 && gs.n == 4) {
-                c.type = Type::EQUAL_ANGLE;
-                c.entityA = gs.vector[0];
-                c.entityB = gs.vector[1];
-                c.entityC = gs.vector[2];
-                c.entityD = gs.vector[3];
-                newcons.push_back(c);
-            } else if(gs.vectors == 3 && gs.n == 3) {
-                c.type = Type::EQUAL_ANGLE;
-                c.entityA = gs.vector[0];
-                c.entityB = gs.vector[1];
-                c.entityC = gs.vector[1];
-                c.entityD = gs.vector[2];
-                newcons.push_back(c);
-            } else if(gs.circlesOrArcs >= 2 && gs.circlesOrArcs == gs.n) {
+            } else  if(gs.circlesOrArcs >= 2 && gs.circlesOrArcs == gs.n) {
                 c.type = Type::EQUAL_RADIUS;
                 c.entityA = gs.entity[0];
                 for (std::vector<hEntity>::size_type k = 1;k < gs.entity.size(); ++k){
@@ -375,18 +363,14 @@ void Constraint::MenuConstrain(Command id) {
             } else {
                 Error(_("Bad selection for equal length / radius constraint. "
                         "This constraint can apply to:\n\n"
-                        "    * two line segments (equal length)\n"
+                        "    * two or more line segments (equal length)\n"
                         "    * two line segments and two points "
                                 "(equal point-line distances)\n"
                         "    * a line segment and two points "
                                 "(equal point-line distances)\n"
                         "    * a line segment, and a point and line segment "
                                 "(point-line distance equals length)\n"
-                        "    * four line segments or normals "
-                                "(equal angle between A,B and C,D)\n"
-                        "    * three line segments or normals "
-                                "(equal angle between A,B and B,C)\n"
-                        "    * two circles or arcs (equal radius)\n"
+                        "    * two or more circles or arcs (equal radius)\n"
                         "    * a line segment and an arc "
                                 "(line segment length equals arc length)\n"));
                 return;
@@ -596,8 +580,8 @@ void Constraint::MenuConstrain(Command id) {
                         Entity::NO_ENTITY);
                     DeleteAllConstraintsFor(Type::VERTICAL, (gs.entity[0]),
                         Entity::NO_ENTITY);
-                    newcons.push_back(c);
                     AddConstraint(&c, /*rememberForUndo=*/false);
+                    newcons.push_back(c);
                     break;
                 }
             }
@@ -631,8 +615,8 @@ void Constraint::MenuConstrain(Command id) {
             } else {
                 Error(_("Bad selection for horizontal / vertical constraint. "
                         "This constraint can apply to:\n\n"
-                        "    * two points\n"
-                        "    * a line segment\n"));
+                        "    * two or more points\n"
+                        "    * one or more line segments\n"));
                 return;
             }
             SS.UndoRemember();
@@ -716,7 +700,19 @@ void Constraint::MenuConstrain(Command id) {
 
         case Command::ANGLE:
         case Command::REF_ANGLE: {
-            if(gs.vectors == 2 && gs.n == 2) {
+            if(gs.vectors == 3 && gs.n == 3) {
+                c.type = Type::EQUAL_ANGLE;
+                c.entityA = gs.vector[0];
+                c.entityB = gs.vector[1];
+                c.entityC = gs.vector[1];
+                c.entityD = gs.vector[2];
+            } else if(gs.vectors == 4 && gs.n == 4) {
+                c.type = Type::EQUAL_ANGLE;
+                c.entityA = gs.vector[0];
+                c.entityB = gs.vector[1];
+                c.entityC = gs.vector[2];
+                c.entityD = gs.vector[3];
+            } else if(gs.vectors == 2 && gs.n == 2) {
                 c.type = Type::ANGLE;
                 c.entityA = gs.vector[0];
                 c.entityB = gs.vector[1];
@@ -724,9 +720,15 @@ void Constraint::MenuConstrain(Command id) {
             } else {
                 Error(_("Bad selection for angle constraint. This constraint "
                         "can apply to:\n\n"
+                        "Angle between:\n"
                         "    * two line segments\n"
                         "    * a line segment and a normal\n"
-                        "    * two normals\n"));
+                        "    * two normals\n"
+                        "\nEqaual angles:\n"
+                        "    * four line segments or normals "
+                        "(equal angle between A,B and C,D)\n"
+                        "    * three line segments or normals "
+                        "(equal angle between A,B and B,C)\n"));
                 return;
             }
 
@@ -816,9 +818,9 @@ void Constraint::MenuConstrain(Command id) {
                 Error(_("Bad selection for parallel / tangent constraint. This "
                         "constraint can apply to:\n\n"
                         "    * two faces\n"
-                        "    * two line segments (parallel)\n"
-                        "    * a line segment and a normal (parallel)\n"
-                        "    * two normals (parallel)\n"
+                        "    * two or more line segments (parallel)\n"
+                        "    * one or more line segments and one or more normals (parallel)\n"
+                        "    * two or more normals (parallel)\n"
                         "    * two line segments, arcs, or beziers, that share "
                               "an endpoint (tangent)\n"));
                 return;
