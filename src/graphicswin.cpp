@@ -146,7 +146,7 @@ const MenuEntry Menu[] = {
 { 0, N_("&Constrain"),                  Command::NONE,             0,       KN, mCon   },
 { 1, N_("&Distance / Diameter"),        Command::DISTANCE_DIA,     'd',     KN, mCon   },
 { 1, N_("Re&ference Dimension"),        Command::REF_DISTANCE,     S|'d',   KN, mCon   },
-{ 1, N_("A&ngle"),                      Command::ANGLE,            'n',     KN, mCon   },
+{ 1, N_("A&ngle / Equal Angle"),        Command::ANGLE,            'n',     KN, mCon   },
 { 1, N_("Reference An&gle"),            Command::REF_ANGLE,        S|'n',   KN, mCon   },
 { 1, N_("Other S&upplementary Angle"),  Command::OTHER_ANGLE,      'u',     KN, mCon   },
 { 1, N_("Toggle R&eference Dim"),       Command::REFERENCE,        'e',     KN, mCon   },
@@ -155,7 +155,7 @@ const MenuEntry Menu[] = {
 { 1, N_("&Vertical"),                   Command::VERTICAL,         'v',     KN, mCon   },
 { 1, NULL,                              Command::NONE,             0,       KN, NULL   },
 { 1, N_("&On Point / Curve / Plane"),   Command::ON_ENTITY,        'o',     KN, mCon   },
-{ 1, N_("E&qual Length / Radius / Angle"), Command::EQUAL,         'q',     KN, mCon   },
+{ 1, N_("E&qual Length / Radius"), Command::EQUAL,         'q',     KN, mCon   },
 { 1, N_("Length / Arc Ra&tio"),         Command::RATIO,            'z',     KN, mCon   },
 { 1, N_("Length / Arc Diff&erence"),    Command::DIFFERENCE,       'j',     KN, mCon   },
 { 1, N_("At &Midpoint"),                Command::AT_MIDPOINT,      'm',     KN, mCon   },
@@ -410,7 +410,7 @@ void GraphicsWindow::Init() {
     showNormals = true;
     showPoints = true;
     showConstruction = true;
-    showConstraints = true;
+    showConstraints = ShowConstraintMode::SCM_SHOW_ALL;
     showShaded = true;
     showEdges = true;
     showMesh = false;

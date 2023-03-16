@@ -579,6 +579,7 @@ public:
     bool     drawBackFaces;
     bool     showContourAreas;
     bool     checkClosedContour;
+    bool     cameraNav;
     bool     turntableNav;
     bool     immediatelyEditDimension;
     bool     automaticLineConstraints;

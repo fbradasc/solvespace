@@ -77,6 +77,8 @@ void SolveSpaceUI::Init() {
     exportBackgroundColor = settings->ThawBool("ExportBackgroundColor", false);
     // Draw back faces of triangles (when mesh is leaky/self-intersecting)
     drawBackFaces = settings->ThawBool("DrawBackFaces", true);
+    // Use camera mouse navigation
+    cameraNav = settings->ThawBool("CameraNav", false);
     // Use turntable mouse navigation
     turntableNav = settings->ThawBool("TurntableNav", false);
     // Immediately edit dimension
@@ -262,6 +264,8 @@ void SolveSpaceUI::Exit() {
     settings->FreezeBool("ShowContourAreas", showContourAreas);
     // Check that contours are closed and not self-intersecting
     settings->FreezeBool("CheckClosedContour", checkClosedContour);
+    // Use camera mouse navigation
+    settings->FreezeBool("CameraNav", cameraNav);
     // Use turntable mouse navigation
     settings->FreezeBool("TurntableNav", turntableNav);
     // Immediately edit dimensions
@@ -305,12 +309,14 @@ void SolveSpaceUI::Exit() {
 void SolveSpaceUI::Refresh() {
     // generateAll must happen bfore updating displays
     if(scheduledGenerateAll) {
-        GenerateAll(Generate::DIRTY, /*andFindFree=*/false, /*genForBBox=*/false);
+		// Clear the flag so that if the call to GenerateAll is blocked by a Message or Error, 
+		// subsequent refreshes do not try to Generate again.
         scheduledGenerateAll = false;
+        GenerateAll(Generate::DIRTY, /*andFindFree=*/false, /*genForBBox=*/false);   
     }
     if(scheduledShowTW) {
-        TW.Show();
         scheduledShowTW = false;
+        TW.Show();
     }
 }
 
@@ -723,10 +729,8 @@ void SolveSpaceUI::MenuFile(Command id) {
 
             // If the user is exporting something where it would be
             // inappropriate to include the constraints, then warn.
-            if(SS.GW.showConstraints &&
-                (dialog->GetFilename().HasExtension("txt") ||
-                 fabs(SS.exportOffset) > LENGTH_EPS))
-            {
+            if(SS.GW.showConstraints != GraphicsWindow::ShowConstraintMode::SCM_NOSHOW &&
+               (dialog->GetFilename().HasExtension("txt") || fabs(SS.exportOffset) > LENGTH_EPS)) {
                 Message(_("Constraints are currently shown, and will be exported "
                           "in the toolpath. This is probably not what you want; "
                           "hide them by clicking the link at the top of the "
