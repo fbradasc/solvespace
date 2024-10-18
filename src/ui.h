@@ -404,6 +404,7 @@ public:
     // All of these are callbacks from the GUI code; first from when
     // we're describing an entity
     static void ScreenEditTtfText(int link, uint32_t v);
+    static void ScreenToggleTtfKerning(int link, uint32_t v);
     static void ScreenSetTtfFont(int link, uint32_t v);
     static void ScreenUnselectAll(int link, uint32_t v);
 
@@ -444,6 +445,8 @@ public:
     static void ScreenShowEditView(int link, uint32_t v);
     static void ScreenGoToWebsite(int link, uint32_t v);
 
+    static void ScreenChangeArcDimDefault(int link, uint32_t v);
+    static void ScreenChangeShowFullFilePath(int link, uint32_t v);
     static void ScreenChangeFixExportColors(int link, uint32_t v);
     static void ScreenChangeFixExportColorsToBW(int link, uint32_t v);
     static void ScreenChangeExportBackgroundColor(int link, uint32_t v);

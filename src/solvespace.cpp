@@ -69,6 +69,10 @@ void SolveSpaceUI::Init() {
     exportScale = settings->ThawFloat("ExportScale", 1.0);
     // Export offset (cutter radius comp)
     exportOffset = settings->ThawFloat("ExportOffset", 0.0);
+    // Dimensions on arcs default to diameter vs radius
+    arcDimDefaultDiameter = settings->ThawBool("ArcDimDefaultDiameter", false);
+    // Show full file path in the menu bar
+    showFullFilePath = settings->ThawBool("ShowFullFilePath", true);
     // Rewrite exported colors close to white into black (assuming white bg)
     fixExportColors = settings->ThawBool("FixExportColors", true);
     // Rewrite exported colors into black & white
@@ -252,6 +256,10 @@ void SolveSpaceUI::Exit() {
     settings->FreezeFloat("ExportScale", exportScale);
     // Export offset (cutter radius comp)
     settings->FreezeFloat("ExportOffset", exportOffset);
+    // Rewrite the default arc dimension setting
+    settings->FreezeBool("ArcDimDefaultDiameter", arcDimDefaultDiameter);
+    // Show full file path in the menu bar
+    settings->FreezeBool("ShowFullFilePath", showFullFilePath);
     // Rewrite exported colors close to white into black (assuming white bg)
     settings->FreezeBool("FixExportColors", fixExportColors);
     // Rewrite exported colors to black & white
@@ -664,7 +672,11 @@ void SolveSpaceUI::UpdateWindowTitles() {
         GW.window->SetTitle(C_("title", "(new sketch)"));
     } else {
         if(!GW.window->SetTitleForFilename(saveFile)) {
-            GW.window->SetTitle(saveFile.raw);
+            if(SS.showFullFilePath) {
+                GW.window->SetTitle(saveFile.raw);
+            } else {
+                GW.window->SetTitle(saveFile.raw.substr(saveFile.raw.find_last_of("/\\") + 1));
+            }
         }
     }
 
@@ -1103,7 +1115,7 @@ void SolveSpaceUI::MenuHelp(Command id) {
 "law. For details, visit http://gnu.org/licenses/\n"
 "\n"
 "© 2008-%d Jonathan Westhues and other authors.\n"),
-PACKAGE_VERSION, 2022);
+PACKAGE_VERSION, 2024);
             break;
 
         case Command::GITHUB:

@@ -43,7 +43,7 @@ const MenuEntry Menu[] = {
 { 1, N_("&Open..."),                    Command::OPEN,             C|'o',   KN, mFile  },
 { 1, N_("Open &Recent"),                Command::OPEN_RECENT,      0,       KN, mFile  },
 { 1, N_("&Save"),                       Command::SAVE,             C|'s',   KN, mFile  },
-{ 1, N_("Save &As..."),                 Command::SAVE_AS,          0,       KN, mFile  },
+{ 1, N_("Save &As..."),                 Command::SAVE_AS,          C|S|'s', KN, mFile  },
 { 1,  NULL,                             Command::NONE,             0,       KN, NULL   },
 { 1, N_("Export &Image..."),            Command::EXPORT_IMAGE,     0,       KN, mFile  },
 { 1, N_("Export 2d &View..."),          Command::EXPORT_VIEW,      0,       KN, mFile  },
@@ -101,8 +101,8 @@ const MenuEntry Menu[] = {
 { 2, N_("Dimensions in &Inches"),       Command::UNITS_INCHES,     0,       KR, mView },
 { 2, N_("Dimensions in &Feet and Inches"), Command::UNITS_FEET_INCHES, 0,   KR, mView },
 { 1,  NULL,                             Command::NONE,             0,       KN, NULL   },
-{ 1, N_("Show &Toolbar"),               Command::SHOW_TOOLBAR,     0,       KC, mView  },
-{ 1, N_("Show Property Bro&wser"),      Command::SHOW_TEXT_WND,    ':',     KC, mView  },
+{ 1, N_("Show &Toolbar"),               Command::SHOW_TOOLBAR,     C|'\t',   KC, mView  },
+{ 1, N_("Show Property Bro&wser"),      Command::SHOW_TEXT_WND,    '\t',     KC, mView  },
 { 1,  NULL,                             Command::NONE,             0,       KN, NULL   },
 { 1, N_("&Full Screen"),                Command::FULL_SCREEN,      C|F|11,  KC, mView  },
 
@@ -127,7 +127,7 @@ const MenuEntry Menu[] = {
 { 1, N_("Anywhere In &3d"),             Command::FREE_IN_3D,       '3',     KR, mReq   },
 { 1, NULL,                              Command::NONE,             0,       KN, NULL   },
 { 1, N_("Datum &Point"),                Command::DATUM_POINT,      'p',     KN, mReq   },
-{ 1, N_("&Workplane"),                  Command::WORKPLANE,        0,       KN, mReq   },
+{ 1, N_("Wor&kplane"),                  Command::WORKPLANE,        0,       KN, mReq   },
 { 1, NULL,                              Command::NONE,             0,       KN, NULL   },
 { 1, N_("Line &Segment"),               Command::LINE_SEGMENT,     's',     KN, mReq   },
 { 1, N_("C&onstruction Line Segment"),  Command::CONSTR_SEGMENT,   S|'s',   KN, mReq   },
@@ -137,10 +137,10 @@ const MenuEntry Menu[] = {
 { 1, N_("&Bezier Cubic Spline"),        Command::CUBIC,            'b',     KN, mReq   },
 { 1, NULL,                              Command::NONE,             0,       KN, NULL   },
 { 1, N_("&Text in TrueType Font"),      Command::TTF_TEXT,         't',     KN, mReq   },
-{ 1, N_("&Image"),                      Command::IMAGE,            0,       KN, mReq   },
+{ 1, N_("I&mage"),                      Command::IMAGE,            0,       KN, mReq   },
 { 1, NULL,                              Command::NONE,             0,       KN, NULL   },
 { 1, N_("To&ggle Construction"),        Command::CONSTRUCTION,     'g',     KN, mReq   },
-{ 1, N_("Tangent &Arc at Point"),       Command::TANGENT_ARC,      S|'a',   KN, mReq   },
+{ 1, N_("Ta&ngent Arc at Point"),       Command::TANGENT_ARC,      S|'a',   KN, mReq   },
 { 1, N_("Split Curves at &Intersection"), Command::SPLIT_CURVES,   'i',     KN, mReq   },
 
 { 0, N_("&Constrain"),                  Command::NONE,             0,       KN, mCon   },
@@ -301,7 +301,7 @@ void GraphicsWindow::PopulateMainMenu() {
 
                     SS.UpdateWindowTitles();
                     PopulateMainMenu();
-                    EnsureValidActives();
+                    SS.GW.EnsureValidActives();
                 });
             }
         } else if(Menu[i].fn == NULL) {
@@ -505,11 +505,11 @@ void GraphicsWindow::AnimateOnto(Quaternion quatf, Vector offsetf) {
     // Animate transition, unless it's a tiny move.
     int64_t t0 = GetMilliseconds();
     int32_t dt = (mp < 0.01 && mo < 10) ? (-20) :
-                     (int32_t)(100 + 1000*mp + 0.4*mo);
-    // Don't ever animate for longer than 2000 ms; we can get absurdly
+                     (int32_t)(100 + 600*mp + 0.4*mo);
+    // Don't ever animate for longer than 800 ms; we can get absurdly
     // long translations (as measured in pixels) if the user zooms out, moves,
     // and then zooms in again.
-    if(dt > 2000) dt = 2000;
+    if(dt > 800) dt = 800;
     Quaternion dq = quatf.Times(quat0.Inverse());
 
     if(!animateTimer) {
@@ -593,7 +593,7 @@ void GraphicsWindow::LoopOverPoints(const std::vector<Entity *> &entities,
     for(Constraint *c : constraints) {
         std::vector<Vector> refs;
         c->GetReferencePoints(camera, &refs);
-        for(Vector p : refs) {
+        for(const Vector &p : refs) {
             HandlePointForZoomToFit(p, pmax, pmin, wmin, usePerspective, camera);
         }
     }
@@ -1102,6 +1102,16 @@ void GraphicsWindow::MenuEdit(Command id) {
                         SS.TW.ClearSuper();
                     }
                 }
+            }
+            // some pending operations need an Undo to properly clean up on ESC
+            if ( (SS.GW.pending.operation == Pending::DRAGGING_NEW_POINT)
+              || (SS.GW.pending.operation == Pending::DRAGGING_NEW_LINE_POINT)
+              || (SS.GW.pending.operation == Pending::DRAGGING_NEW_ARC_POINT)
+              || (SS.GW.pending.operation == Pending::DRAGGING_NEW_CUBIC_POINT)
+              || (SS.GW.pending.operation == Pending::DRAGGING_NEW_RADIUS) )
+            {
+              SS.GW.ClearSuper();
+              SS.UndoUndo();
             }
             SS.GW.ClearSuper();
             SS.TW.HideEditControl();

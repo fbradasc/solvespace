@@ -573,6 +573,8 @@ public:
     double   gridSpacing;
     double   exportScale;
     double   exportOffset;
+    bool     arcDimDefaultDiameter;
+    bool     showFullFilePath;
     bool     fixExportColors;
     bool     fixExportColorsToBW;
     bool     exportBackgroundColor;
