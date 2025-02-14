@@ -21,3 +21,7 @@
 out/
 .vs/
 CMakeSettings.json
+__pycache__/
+solvespace.egg-info/
+dist/
+.DS_Store

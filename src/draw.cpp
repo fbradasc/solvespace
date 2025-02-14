@@ -186,7 +186,7 @@ void GraphicsWindow::MakeSelected(Selection *stog) {
     if(stog->entity.v != 0 && SK.GetEntity(stog->entity)->IsFace()) {
         // In the interest of speed for the triangle drawing code,
         // only MAX_SELECTABLE_FACES faces may be selected at a time.
-        unsigned int c = 0;
+        int c = 0;
         Selection *s;
         selection.ClearTags();
         for(s = selection.First(); s; s = selection.NextAfter(s)) {

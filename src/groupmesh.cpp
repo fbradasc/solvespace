@@ -249,7 +249,7 @@ void Group::GenerateShellAndMesh() {
         Vector origin = Vector::From(0, 0, 0);
 
         Vector tbot, ttop;
-        if(subtype == Subtype::ONE_SIDED) {
+        if(subtype == Subtype::ONE_SIDED || subtype == Subtype::ONE_SKEWED) {
             tbot = Vector::From(0, 0, 0); ttop = translate.ScaledBy(2);
         } else {
             tbot = translate.ScaledBy(-1); ttop = translate.ScaledBy(1);
